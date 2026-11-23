@@ -1,0 +1,4 @@
+#!/bin/bash
+# KawKaw.app: everything lives inside the app bundle (Resources/kawkaw).
+DIR="$(cd "$(dirname "$0")/../Resources/kawkaw" && pwd)"
+exec "$DIR/runtime/node" "$DIR/bridge/src/cli.js" open

@@ -1,0 +1,83 @@
+name: Build installers
+# Push a tag like v0.2.0 to publish KawKaw-Setup.exe (Windows) and KawKaw-mac-*.pkg (Mac) on the Releases page.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  NODE_MAJOR: "22"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: Version
+        shell: bash
+        run: echo "KAWKAW_VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
+      - name: Stage app with bundled Node.js
+        shell: bash
+        run: |
+          npm ci --omit=dev --no-audit --no-fund || npm install --omit=dev --no-audit --no-fund
+          node installer/package-plugin.js
+          mkdir -p stage/runtime
+          cp -r bridge premiere-plugin dist assets node_modules package.json README.md LICENSE stage/
+          cp "$(node -p process.execPath)" stage/runtime/node.exe
+      - name: Build KawKaw-Setup.exe
+        shell: pwsh
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\windows\kawkaw.iss
+      - uses: actions/upload-artifact@v4
+        with: { name: KawKaw-windows, path: out/*.exe }
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with: { files: "out/*.exe" }
+
+  mac:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [arm64, x64] # Apple Silicon and Intel Macs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: Stage KawKaw.app with bundled Node.js (${{ matrix.arch }})
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "KAWKAW_VERSION=$VERSION" >> $GITHUB_ENV
+          # ffmpeg-static picks its binary from these
+          npm_config_arch=${{ matrix.arch }} npm_config_platform=darwin npm install --omit=dev --no-audit --no-fund
+          # cloudflared downloads the right binary on the user's Mac the first time ChatGPT is turned on
+          rm -rf node_modules/cloudflared/bin/*
+          node installer/package-plugin.js
+          NODE_VER=$(curl -s https://nodejs.org/dist/index.json | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d).find(r=>r.version.startsWith('v${NODE_MAJOR}.')).version))")
+          curl -sL "https://nodejs.org/dist/$NODE_VER/node-$NODE_VER-darwin-${{ matrix.arch }}.tar.gz" | tar xz
+          APP=build/root/Applications/KawKaw.app
+          mkdir -p build/root/Applications
+          cp -R installer/mac/KawKaw.app "$APP"
+          cp assets/kawkaw.icns "$APP/Contents/Resources/kawkaw.icns"
+          R="$APP/Contents/Resources/kawkaw"
+          mkdir -p "$R/runtime"
+          cp -R bridge premiere-plugin dist assets node_modules package.json README.md LICENSE "$R/"
+          cp "node-$NODE_VER-darwin-${{ matrix.arch }}/bin/node" "$R/runtime/node"
+          sed -i '' "s/0.2.0/$VERSION/g" "$APP/Contents/Info.plist"
+          codesign --force --deep -s - "$APP" || true   # ad-hoc signature
+      - name: Build KawKaw.pkg
+        run: |
+          ARCH=${{ matrix.arch }}; [ "$ARCH" = "x64" ] && HOSTARCH=x86_64 || HOSTARCH=arm64
+          pkgbuild --root build/root --identifier com.nelsonmaita.kawkaw --version "$KAWKAW_VERSION" \
+            --scripts installer/mac/scripts --install-location / build/kawkaw-core.pkg
+          sed "s/ARCH_PLACEHOLDER/$HOSTARCH/" installer/mac/distribution.xml > build/distribution.xml
+          mkdir -p out
+          LABEL=$([ "$ARCH" = "x64" ] && echo intel || echo apple-silicon)
+          productbuild --distribution build/distribution.xml --resources installer/mac/resources \
+            --package-path build "out/KawKaw-$KAWKAW_VERSION-mac-$LABEL.pkg"
+      - uses: actions/upload-artifact@v4
+        with: { name: "KawKaw-mac-${{ matrix.arch }}", path: out/*.pkg }
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with: { files: "out/*.pkg" }

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+  <title>KawKaw</title>
+  <welcome file="welcome.html" mime-type="text/html"/>
+  <options customize="never" require-scripts="false" hostArchitectures="ARCH_PLACEHOLDER"/>
+  <domains enable_localSystem="true"/>
+  <choices-outline><line choice="default"><line choice="kawkaw"/></line></choices-outline>
+  <choice id="default"/>
+  <choice id="kawkaw" visible="false"><pkg-ref id="com.nelsonmaita.kawkaw"/></choice>
+  <pkg-ref id="com.nelsonmaita.kawkaw" version="0.2.0" onConclusion="none">kawkaw-core.pkg</pkg-ref>
+</installer-gui-script>

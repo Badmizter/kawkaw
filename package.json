@@ -1,0 +1,28 @@
+{
+  "name": "kawkaw",
+  "version": "0.2.0",
+  "description": "Connect Claude to Premiere Pro and After Effects with custom buttons, music-video presets, audio-gap removal and AI gap fill (Kling / Higgsfield).",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "kawkaw": "bridge/src/cli.js"
+  },
+  "main": "bridge/src/cli.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node bridge/src/cli.js daemon",
+    "mcp": "node bridge/src/cli.js mcp",
+    "setup": "node bridge/src/cli.js setup",
+    "package-plugin": "node installer/package-plugin.js",
+    "check": "node --check bridge/src/*.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "cloudflared": "^0.7.3",
+    "ffmpeg-static": "^5.2.0",
+    "ws": "^8.18.0",
+    "zod": "^3.25.0"
+  }
+}

@@ -1,0 +1,28 @@
+# KawKaw Hub backup on Cloudflare Workers (free plan is enough for a few friends).
+# Deploy:  npx wrangler login && npx wrangler secret put HUB_SECRET && npx wrangler deploy
+name = "kawkaw-hub"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+
+# The public hostname ChatGPT uses. Change to your domain (must be on your Cloudflare account).
+routes = [
+  { pattern = "kawkaw.nelsonmaita.com", custom_domain = true }
+]
+
+[vars]
+# Your home-server hub (Cloudflare Tunnel hostname). The Worker tries it first.
+ORIGIN = "https://kawkaw-hub.nelsonmaita.com"
+# owner/repo on GitHub — the download buttons on the home page point to its latest release
+GITHUB_REPO = "Badmizter/kawkaw"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "AgentRoom"
+
+[[durable_objects.bindings]]
+name = "REGISTRY"
+class_name = "Registry"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AgentRoom", "Registry"]

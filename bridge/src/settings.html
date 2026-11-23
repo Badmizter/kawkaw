@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>KawKaw Settings</title>
+<link rel="icon" href="/logo.png">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#0e0b17; --panel:#17132a; --line:#2d2648; --text:#e9e7e3; --dim:#9a9aa2; --accent:#9b5cff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 -apple-system, "Segoe UI", Inter, sans-serif; }
+  header { padding:28px 32px 8px; display:flex; align-items:baseline; gap:14px; }
+  h1 { margin:0; font-size:22px; letter-spacing:.02em; }
+  h1 span { color:#22d3ee; }
+  header { align-items:center !important; }
+  .logo { width:54px; height:54px; }
+  #status { color:var(--dim); font-size:12px; }
+  main { padding:8px 32px 60px; display:grid; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); gap:18px; max-width:1300px; }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px 20px; }
+  section.wide { grid-column:1/-1; }
+  h2 { margin:0 0 12px; font-size:13px; text-transform:uppercase; letter-spacing:.12em; color:var(--dim); }
+  label { display:block; margin:10px 0 4px; color:var(--dim); font-size:12px; }
+  input, select, textarea { width:100%; background:#0d0e10; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:8px 10px; font:inherit; }
+  textarea { font:12px/1.5 ui-monospace, Menlo, Consolas, monospace; min-height:280px; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .hint { color:var(--dim); font-size:12px; margin-top:6px; }
+  .bar { position:sticky; bottom:0; padding:14px 32px; background:linear-gradient(transparent, var(--bg) 40%); display:flex; gap:12px; align-items:center; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:10px 20px; font-weight:600; cursor:pointer; }
+  #msg { color:var(--dim); }
+</style>
+</head>
+<body>
+<header><img src="/logo.png" class="logo" alt=""><h1>Kaw<span>Kaw</span></h1><div id="status">connecting…</div></header>
+<main>
+  <section class="wide" id="gptSection">
+    <h2>ChatGPT &amp; ChatGPT Atlas</h2>
+    <div class="row">
+      <div>
+        <label>Connection</label>
+        <select id="gptMode">
+          <option value="quick">Free Cloudflare link (new link each time KawKaw restarts)</option>
+          <option value="hub">Join a KawKaw Hub (invite code from a friend · link never changes)</option>
+          <option value="server">Through my home server's Cloudflare tunnel (link never changes)</option>
+          <option value="custom">My own domain, tunnel on this computer (link never changes)</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:10px">
+        <button id="gptToggle" type="button">Turn on ChatGPT</button>
+        <span id="gptState" class="hint"></span>
+      </div>
+    </div>
+    <div id="gptCustom" style="display:none" class="row">
+      <div><label>Public URL</label><input id="gptCustomUrl" placeholder="https://kawkaw.yourdomain.com"></div>
+      <div><label>Cloudflare tunnel token (optional)</label><input id="gptTunnelToken" type="password" placeholder="leave empty if you run your own proxy"></div>
+    </div>
+    <div id="gptHub" style="display:none">
+      <label>Invite code</label>
+      <textarea id="gptInvite" style="min-height:70px" placeholder="kk1.…"></textarea>
+      <div id="gptHubConns" class="hint"></div>
+    </div>
+    <div id="gptServer" style="display:none">
+      <div class="row">
+        <div><label>Public URL</label><input id="gptServerUrl" placeholder="https://kawkaw.nelsonmaita.com"></div>
+        <div><label>Home server address(es)</label><input id="gptAllowed" placeholder="10.0.0.9"></div>
+      </div>
+      <div class="hint" id="gptServerHint"></div>
+    </div>
+    <label>Paste this into ChatGPT → Settings → Apps &amp; Connectors → Create (Authentication: None)</label>
+    <div style="display:flex;gap:8px"><input id="gptUrl" readonly placeholder="Turn on ChatGPT to get your link"><button id="gptCopy" type="button">Copy</button><button id="gptRotate" type="button" title="Make a new secret link (the old one stops working)">New link</button></div>
+    <div class="hint">The link contains a secret: anyone who has it can control your Premiere/AE while KawKaw is running. Don't share it. ChatGPT needs a paid plan with developer mode / custom apps; some plans only allow read-only tools.</div>
+  </section>
+  <section>
+    <h2>AI gap fill</h2>
+    <label>Default provider</label>
+    <select id="provider">
+      <option value="manual">Manual — I generate on the website and drop the file in a folder</option>
+      <option value="higgsfield">Higgsfield API</option>
+      <option value="kling">Kling API</option>
+    </select>
+    <div class="hint">API generation is billed by the provider per request (separate from website subscriptions).</div>
+    <label>Place AI clips on video track</label>
+    <div class="row"><input id="gfTrack" placeholder="auto or 7"><input id="gfAudio" placeholder="audio track (0 = none)"></div>
+  </section>
+  <section>
+    <h2>Higgsfield</h2>
+    <div class="row"><div><label>API key ID</label><input id="hfId"></div><div><label>API key secret</label><input id="hfSecret" type="password"></div></div>
+    <label>Model endpoint</label><input id="hfEndpoint">
+    <div class="row">
+      <div><label>Mode</label><select id="hfMode"><option>std</option><option>pro</option><option>4k</option></select></div>
+      <div><label>Aspect ratio</label><select id="hfAspect"><option>16:9</option><option>9:16</option><option>1:1</option></select></div>
+    </div>
+    <label>Sound</label><select id="hfSound"><option>off</option><option>on</option></select>
+    <div class="hint">Keys from console.higgsfield.ai</div>
+  </section>
+  <section>
+    <h2>Kling</h2>
+    <label>API key</label><input id="klKey" type="password">
+    <label>Model</label><input id="klModel">
+    <label>API host</label><input id="klBase">
+    <div class="hint">Calls POST {host}/image-to-video/{model}. Last frame needs 1080p.</div>
+  </section>
+  <section>
+    <h2>Remove audio gaps</h2>
+    <div class="row">
+      <div><label>Silence threshold (dB)</label><input id="siDb" type="number" step="1"></div>
+      <div><label>Min gap length (s)</label><input id="siMin" type="number" step="0.05"></div>
+    </div>
+    <label>Padding kept around speech (s)</label><input id="siPad" type="number" step="0.01">
+  </section>
+  <section>
+    <h2>After Effects</h2>
+    <label>App name (macOS)</label><input id="aeName">
+    <label>AfterFX.exe path (Windows)</label><input id="aeExe">
+    <div class="hint">In AE: Settings → Scripting &amp; Expressions → Allow Scripts to Write Files and Access Network.</div>
+  </section>
+  <section class="wide">
+    <h2>Music video presets</h2>
+    <textarea id="presets" spellcheck="false"></textarea>
+    <div class="hint">tracks: names for V1–V7 / A1…; bpm + beatsPerMarker for beat markers; rules: how Claude should cut.</div>
+  </section>
+  <section class="wide">
+    <h2>Panel buttons</h2>
+    <textarea id="buttons" spellcheck="false" style="min-height:200px"></textarea>
+    <div class="hint">Actions: removeAudioGaps · createGapFromInOut · applyPresetTracks {preset} · addBeatMarkers {preset} · sendRangeToAE · setInOutAroundSelection · macro {steps:[{action,params}]}</div>
+  </section>
+</main>
+<div class="bar"><button id="save">Save settings</button><span id="msg"></span></div>
+<script>
+let cfg;
+const $ = (id) => document.getElementById(id);
+async function load() {
+  const st = await fetch("/api/status").then(r => r.json());
+  $("status").textContent = `v${st.version} · connected apps: ${st.hosts.length ? st.hosts.join(", ") : "none yet"} · data: ${st.home}`;
+  cfg = await fetch("/api/config").then(r => r.json());
+  const a = cfg.ai, h = a.higgsfield, k = a.kling;
+  $("provider").value = a.defaultProvider; $("gfTrack").value = cfg.gapFill.videoTrack; $("gfAudio").value = cfg.gapFill.audioTrack;
+  $("hfId").value = h.keyId; $("hfSecret").value = h.keySecret; $("hfEndpoint").value = h.endpoint; $("hfMode").value = h.mode; $("hfAspect").value = h.aspectRatio; $("hfSound").value = h.sound;
+  $("klKey").value = k.apiKey; $("klModel").value = k.model; $("klBase").value = k.baseUrl;
+  $("siDb").value = cfg.silence.thresholdDb; $("siMin").value = cfg.silence.minSilenceSec; $("siPad").value = cfg.silence.paddingSec;
+  $("aeName").value = cfg.afterEffects.appName; $("aeExe").value = cfg.afterEffects.windowsExe;
+  $("presets").value = JSON.stringify(cfg.presets, null, 2); $("buttons").value = JSON.stringify(cfg.buttons, null, 2);
+}
+$("save").onclick = async () => {
+  try {
+    const a = cfg.ai;
+    a.defaultProvider = $("provider").value;
+    const t = $("gfTrack").value.trim(); cfg.gapFill.videoTrack = t === "auto" || t === "" ? "auto" : Number(t); cfg.gapFill.audioTrack = Number($("gfAudio").value || 0);
+    Object.assign(a.higgsfield, { keyId: $("hfId").value, keySecret: $("hfSecret").value, endpoint: $("hfEndpoint").value, mode: $("hfMode").value, aspectRatio: $("hfAspect").value, sound: $("hfSound").value });
+    Object.assign(a.kling, { apiKey: $("klKey").value, model: $("klModel").value, baseUrl: $("klBase").value });
+    Object.assign(cfg.silence, { thresholdDb: Number($("siDb").value), minSilenceSec: Number($("siMin").value), paddingSec: Number($("siPad").value) });
+    Object.assign(cfg.afterEffects, { appName: $("aeName").value, windowsExe: $("aeExe").value });
+    cfg.presets = JSON.parse($("presets").value); cfg.buttons = JSON.parse($("buttons").value);
+    const r = await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
+    $("msg").textContent = r.ok ? "Saved ✔ — the Premiere panel updates automatically." : "Error: " + (await r.json()).error;
+  } catch (e) { $("msg").textContent = "Error: " + e.message; }
+};
+// ---- ChatGPT
+let gpt = null;
+function renderGpt(i) {
+  gpt = i;
+  $("gptMode").value = i.mode; showModeFields(i.mode);
+  if (document.activeElement !== $("gptAllowed")) $("gptAllowed").value = (i.allowedIps || []).join(", ");
+  $("gptServerHint").innerHTML = `On your server, point the tunnel hostname to <b>http://${(i.lanIps || [])[0] || "THIS-COMPUTER-IP"}:${i.serverPort}</b> (this computer: ${(i.lanIps || []).join(", ") || "no network"}). Only the server's address can connect, and only to the ChatGPT link.`;
+  $("gptToggle").textContent = i.enabled ? "Turn off ChatGPT" : "Turn on ChatGPT";
+  $("gptState").textContent = i.enabled ? (i.status === "ready" ? "● online" : i.status + "…") + (i.error ? " — " + i.error : "") : "off";
+  $("gptUrl").value = i.connectorUrl || "";
+  if (i.hub) {
+    $("gptHubConns").innerHTML = (i.hub.name ? `Joined as <b>${i.hub.name}</b> · ${i.hub.hub}<br>` : "") +
+      i.hub.connections.map(c => `${c.state === "online" ? "🟢" : c.state === "connecting" ? "🟡" : "🔴"} ${c.role}: ${c.state}${c.error ? " — " + c.error : ""}`).join("<br>") +
+      (i.hub.connections.length > 1 ? "<br>If the home server loses power, ChatGPT keeps working through the backup with the same link." : "");
+    if (cfg && cfg.chatgpt.hubInvite && !$("gptInvite").value) $("gptInvite").value = cfg.chatgpt.hubInvite;
+  }
+}
+async function gptPost(body) {
+  const r = await fetch("/api/chatgpt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  renderGpt(await r.json());
+}
+async function pollGpt() { try { renderGpt(await fetch("/api/chatgpt").then(r => r.json())); } catch {} }
+$("gptToggle").onclick = () => {
+  const m = $("gptMode").value;
+  gptPost({ enabled: !gpt.enabled, mode: m, customUrl: m === "server" ? $("gptServerUrl").value : $("gptCustomUrl").value, tunnelToken: $("gptTunnelToken").value, allowedIps: $("gptAllowed").value, hubInvite: $("gptInvite").value });
+};
+function showModeFields(m) { $("gptCustom").style.display = m === "custom" ? "grid" : "none"; $("gptServer").style.display = m === "server" ? "block" : "none"; $("gptHub").style.display = m === "hub" ? "block" : "none"; }
+$("gptInvite").onchange = () => gptPost({ hubInvite: $("gptInvite").value });
+$("gptMode").onchange = () => { showModeFields($("gptMode").value); gptPost({ mode: $("gptMode").value }); };
+$("gptServerUrl").onchange = () => gptPost({ customUrl: $("gptServerUrl").value });
+$("gptAllowed").onchange = () => gptPost({ allowedIps: $("gptAllowed").value });
+$("gptCustomUrl").onchange = () => gptPost({ customUrl: $("gptCustomUrl").value });
+$("gptTunnelToken").onchange = () => gptPost({ tunnelToken: $("gptTunnelToken").value });
+$("gptCopy").onclick = () => { navigator.clipboard.writeText($("gptUrl").value); $("gptCopy").textContent = "Copied ✔"; setTimeout(() => $("gptCopy").textContent = "Copy", 1500); };
+$("gptRotate").onclick = () => { if (confirm("Make a new link? You'll need to update it in ChatGPT.")) gptPost({ rotate: true }); };
+setInterval(pollGpt, 3000);
+load().then(() => { pollGpt(); $("gptCustomUrl").value = cfg.chatgpt.customUrl || ""; $("gptServerUrl").value = cfg.chatgpt.customUrl || ""; $("gptTunnelToken").value = cfg.chatgpt.tunnelToken || ""; }).catch(e => $("status").textContent = "Error: " + e.message);
+</script>
+</body>
+</html>

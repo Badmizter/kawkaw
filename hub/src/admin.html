@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>KawKaw Hub</title><link rel="icon" href="/admin/logo.png">
+<style>
+  body{margin:0;background:#0e0b17;color:#ece9f5;font:14px/1.5 -apple-system,"Segoe UI",sans-serif}
+  header{display:flex;align-items:center;gap:14px;padding:24px 32px}
+  header img{width:52px;height:52px} h1{margin:0;font-size:22px} h1 span{color:#22d3ee}
+  main{max-width:960px;padding:0 32px 60px}
+  section{background:#17132a;border:1px solid #2d2648;border-radius:10px;padding:18px 20px;margin-bottom:18px}
+  h2{margin:0 0 12px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#a49cc4}
+  input{background:#0b0914;color:#ece9f5;border:1px solid #2d2648;border-radius:6px;padding:9px 11px;font:inherit;width:260px}
+  button{background:#9b5cff;color:#fff;border:0;border-radius:6px;padding:9px 16px;font-weight:600;cursor:pointer}
+  button.ghost{background:#2a2442}
+  table{width:100%;border-collapse:collapse} td,th{text-align:left;padding:8px 6px;border-bottom:1px solid #241f3b} th{color:#a49cc4;font-weight:500;font-size:12px}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+  .on{background:#3ee08f}.off{background:#555}
+  textarea{width:100%;height:84px;background:#0b0914;color:#cfe;border:1px solid #2d2648;border-radius:6px;font:12px ui-monospace,monospace;padding:8px;box-sizing:border-box}
+  .hint{color:#8b84a8;font-size:12px}
+</style></head><body>
+<header><img src="/admin/logo.png" alt=""><h1>Kaw<span>Kaw</span> Hub</h1><span class="hint" id="cfg"></span></header>
+<main>
+  <section>
+    <h2>Invite a friend</h2>
+    <input id="name" placeholder="Friend's name"> <button id="mk">Create invite</button>
+    <div id="out" style="display:none;margin-top:14px">
+      <div class="hint">Send this code to your friend. They paste it in KawKaw → Settings → ChatGPT → <b>Join a KawKaw Hub</b>:</div>
+      <textarea id="code" readonly></textarea>
+      <button class="ghost" id="copy">Copy code</button>
+    </div>
+  </section>
+  <section>
+    <h2>People</h2>
+    <table><thead><tr><th>Status</th><th>Name</th><th>ID</th><th>Created</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+    <div class="hint" style="margin-top:8px">Revoking disconnects them right away and also tells the Cloudflare backup.</div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const api = (p, b) => fetch("/admin/api/" + p, b ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) } : {}).then(r => r.json());
+async function load() {
+  const s = await api("state");
+  $("cfg").textContent = s.publicBase ? `${s.publicBase} · ${s.agentUrls.length > 1 ? "with Cloudflare backup" : "no backup configured"}` : "Not configured yet — run: node hub/src/cli.js init …";
+  $("rows").innerHTML = "";
+  for (const u of s.users) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td><span class="dot ${u.online ? "on" : "off"}"></span>${u.revoked ? "revoked" : u.online ? "online" : "offline"}</td><td></td><td class="hint">${u.id}</td><td class="hint">${new Date(u.created).toLocaleDateString()}</td><td></td>`;
+    tr.children[1].textContent = u.name;
+    const b = document.createElement("button"); b.className = "ghost"; b.textContent = u.revoked ? "Restore" : "Revoke";
+    b.onclick = async () => { if (u.revoked || confirm("Revoke " + u.name + "?")) { const r = await api("revoke", { id: u.id, revoked: !u.revoked }); if (r.sync && r.sync.error) alert("Revoked here, but the Cloudflare backup didn't update: " + r.sync.error); load(); } };
+    const c = document.createElement("button"); c.className = "ghost"; c.textContent = "Code"; c.style.marginLeft = "6px";
+    c.onclick = async () => { const r = await api("reinvite", { id: u.id }); showCode(r.code); };
+    tr.children[4].append(b, c);
+    $("rows").appendChild(tr);
+  }
+}
+function showCode(code) { $("code").value = code; $("out").style.display = "block"; $("code").select(); }
+$("mk").onclick = async () => { const r = await api("invite", { name: $("name").value || "friend" }); if (r.error) return alert(r.error); showCode(r.code); $("name").value = ""; load(); };
+$("copy").onclick = () => { navigator.clipboard.writeText($("code").value); $("copy").textContent = "Copied ✔"; setTimeout(() => $("copy").textContent = "Copy code", 1500); };
+load(); setInterval(load, 5000);
+</script></body></html>

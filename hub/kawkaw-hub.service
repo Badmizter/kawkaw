@@ -1,0 +1,19 @@
+# systemd service for KawKaw Hub — starts on boot and restarts if it crashes.
+# Install: sudo cp hub/kawkaw-hub.service /etc/systemd/system/ && edit User/paths, then:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now kawkaw-hub
+[Unit]
+Description=KawKaw Hub (ChatGPT relay for friends' KawKaw apps)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=extatic
+WorkingDirectory=/home/extatic/KawKaw
+ExecStart=/usr/bin/node hub/src/cli.js serve
+Restart=always
+RestartSec=5
+Environment=KAWKAW_HUB_PORT=47400
+
+[Install]
+WantedBy=multi-user.target

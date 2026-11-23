@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="top">
+    <div class="brand"><img src="icons/logo.png" class="logo">Kaw<span>Kaw</span></div>
+    <div id="conn" class="conn off">offline</div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="buttons">Buttons</div>
+    <div class="tab" data-tab="ai">AI Fill</div>
+    <div class="tab" data-tab="presets">Presets</div>
+  </div>
+
+  <!-- BUTTONS -->
+  <div class="page" id="page-buttons">
+    <div id="buttonGrid" class="grid"></div>
+    <div class="sub">Gap removal</div>
+    <div class="row">
+      <label>dB</label><input id="siDb" type="number" value="-40">
+      <label>min s</label><input id="siMin" type="number" value="0.5">
+    </div>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="siRipple" checked> Ripple (close the gaps)</label>
+    </div>
+    <div class="hint">Select clip(s) in the timeline, then press Remove Audio Gaps. Edit buttons in Settings.</div>
+    <div class="row"><button class="ghost" id="openSettings">Settings…</button></div>
+  </div>
+
+  <!-- AI FILL -->
+  <div class="page hidden" id="page-ai">
+    <div class="row">
+      <button id="gapFromInOut" class="primary">New gap from In/Out</button>
+      <button id="gapEmpty" class="ghost">Empty gap</button>
+    </div>
+    <select id="gapSelect"></select>
+    <div id="gapEditor" class="hidden">
+      <div class="meta" id="gapMeta"></div>
+      <div class="frames">
+        <div class="slot">
+          <div class="slotLabel">FIRST FRAME</div>
+          <div class="thumb" id="firstThumb"><span>empty</span></div>
+          <div class="row tight"><button class="ghost sm" id="pickFirst">Choose file…</button><button class="ghost sm" id="clearFirst">✕</button></div>
+        </div>
+        <div class="slot">
+          <div class="slotLabel">LAST FRAME</div>
+          <div class="thumb" id="lastThumb"><span>empty</span></div>
+          <div class="row tight"><button class="ghost sm" id="pickLast">Choose file…</button><button class="ghost sm" id="clearLast">✕</button></div>
+        </div>
+      </div>
+      <textarea id="prompt" placeholder="Prompt — or ask Claude: “look at my KawKaw gap and write the prompt”"></textarea>
+      <div class="row">
+        <select id="provider">
+          <option value="manual">Manual (website + drop file)</option>
+          <option value="higgsfield">Higgsfield API</option>
+          <option value="kling">Kling API</option>
+        </select>
+        <input id="gapTrack" placeholder="V track (auto)" style="width:90px">
+      </div>
+      <div class="row">
+        <button id="generate" class="primary">Generate</button>
+        <button id="place" class="ghost">Place clip</button>
+        <button id="deleteGap" class="ghost">Delete</button>
+      </div>
+      <div class="status" id="gapStatus"></div>
+    </div>
+  </div>
+
+  <!-- PRESETS -->
+  <div class="page hidden" id="page-presets">
+    <select id="presetSelect"></select>
+    <div id="presetView" class="presetView"></div>
+    <div class="row">
+      <button id="applyTracks" class="primary">Name tracks</button>
+      <button id="beatMarkers" class="ghost">Beat markers In→Out</button>
+    </div>
+    <div class="hint">Ask Claude to “cut V1–V4 to the beat using my preset” — it reads these rules.</div>
+  </div>
+
+  <div id="log" class="log"></div>
+  <script src="main.js"></script>
+</body>
+</html>

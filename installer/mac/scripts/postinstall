@@ -1,0 +1,15 @@
+#!/bin/bash
+# Runs as root after KawKaw.pkg installs /Applications/KawKaw.app — finish setup as the logged-in user.
+APP="/Applications/KawKaw.app/Contents/Resources/kawkaw"
+USER_NAME=$(stat -f%Su /dev/console)
+USER_ID=$(id -u "$USER_NAME")
+USER_HOME=$(dscl . -read "/Users/$USER_NAME" NFSHomeDirectory | awk '{print $2}')
+xattr -dr com.apple.quarantine /Applications/KawKaw.app 2>/dev/null || true
+sudo -u "$USER_NAME" HOME="$USER_HOME" "$APP/runtime/node" "$APP/bridge/src/cli.js" stop || true
+sudo -u "$USER_NAME" HOME="$USER_HOME" "$APP/runtime/node" "$APP/bridge/src/cli.js" setup
+PLIST="$USER_HOME/Library/LaunchAgents/com.kawkaw.daemon.plist"
+launchctl bootout "gui/$USER_ID" "$PLIST" 2>/dev/null || true
+launchctl bootstrap "gui/$USER_ID" "$PLIST" 2>/dev/null || sudo -u "$USER_NAME" launchctl load -w "$PLIST"
+sudo -u "$USER_NAME" open "$APP/dist/KawKaw.ccx" || true
+sudo -u "$USER_NAME" open "http://127.0.0.1:47321/settings" || true
+exit 0
