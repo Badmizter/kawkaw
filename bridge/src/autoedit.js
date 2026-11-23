@@ -31,13 +31,13 @@ export async function scanFolder(dir) {
  * Plan: one cut every `beatsPerCut` beats, cycling through the clips in name order (or shuffled).
  * Each cut takes a fresh part of its clip (skipping the first/last half second, where takes are usually messy).
  */
-export async function planAutoEdit({ folder, music, bpm, beatsPerCut = 2, lengthSec = 0, startSec = 0, shuffle = false, offsetSec = 0 }) {
+export async function planAutoEdit({ folder, files: fileList, music, bpm, beatsPerCut = 2, lengthSec = 0, startSec = 0, shuffle = false, offsetSec = 0 }) {
   if (!bpm || bpm < 30 || bpm > 300) throw new Error("Set a BPM between 30 and 300.");
   if (!music || !fs.existsSync(music)) throw new Error("Choose a music file.");
   if (!AUDIO.test(music) && !VIDEO.test(music)) throw new Error("The music file should be WAV, MP3, AIFF, M4A, AAC or FLAC.");
   const musicDur = await probeDuration(music);
   if (!musicDur) throw new Error("Couldn't read the music file's length.");
-  let files = (await scanFolder(folder)).filter((f) => f.isImage || (f.durationSec && f.durationSec > 0.3));
+  let files = (fileList ? await scanFiles(fileList) : await scanFolder(folder)).filter((f) => f.isImage || (f.durationSec && f.durationSec > 0.3));
   if (!files.length) throw new Error("No usable clips in that folder.");
   if (shuffle) files = files.map((f) => [Math.random(), f]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
 
@@ -69,4 +69,58 @@ export async function planAutoEdit({ folder, music, bpm, beatsPerCut = 2, length
     used.set(f.path, start + len);
     return { path: f.path, isImage: false, srcIn: +start.toFixed(3), srcOut: +(start + len).toFixed(3) };
   }
+}
+
+/** Same as scanFolder but for an explicit list of files (e.g. the clips in a Premiere bin). */
+export async function scanFiles(paths) {
+  const out = [];
+  for (const p of (paths || []).slice(0, 400)) {
+    if (!p || !fs.existsSync(p)) continue;
+    const isImage = IMAGE.test(p);
+    out.push({ path: p, name: path.basename(p), isImage, durationSec: isImage ? null : await probeDuration(p) });
+  }
+  return out;
+}
+
+/**
+ * Rough tempo estimate: onset-strength envelope + autocorrelation, 70–180 BPM.
+ * Good enough as a starting point; the editor can type the exact value.
+ */
+export async function detectBpm(file, { maxSec = 90 } = {}) {
+  const { spawn } = await import("node:child_process");
+  const ffmpegPath = (await import("ffmpeg-static")).default;
+  const rate = 11025, hop = 256;
+  const pcm = await new Promise((resolve, reject) => {
+    const chunks = [];
+    const p = spawn(ffmpegPath, ["-hide_banner", "-loglevel", "error", "-ss", "15", "-t", String(maxSec), "-i", file, "-ac", "1", "-ar", String(rate), "-f", "f32le", "-"], { windowsHide: true });
+    p.stdout.on("data", (d) => chunks.push(d));
+    p.on("error", reject);
+    p.on("close", () => resolve(Buffer.concat(chunks)));
+  });
+  let samples = new Float32Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.length / 4));
+  if (samples.length < rate * 8) throw new Error("Song too short to detect BPM.");
+  // energy per hop, then half-wave-rectified difference = onset strength
+  const n = Math.floor(samples.length / hop);
+  const env = new Float32Array(n);
+  for (let i = 0; i < n; i++) { let e = 0; for (let j = 0; j < hop; j++) { const v = samples[i * hop + j]; e += v * v; } env[i] = Math.log1p(e); }
+  const on = new Float32Array(n);
+  for (let i = 1; i < n; i++) on[i] = Math.max(0, env[i] - env[i - 1]);
+  const mean = on.reduce((a, b) => a + b, 0) / n;
+  for (let i = 0; i < n; i++) on[i] -= mean;
+  const fps = rate / hop;
+  let best = { bpm: 0, score: -Infinity };
+  for (let bpm = 70; bpm <= 180; bpm += 0.5) {
+    const lag = (60 / bpm) * fps;
+    let s = 0;
+    for (const mult of [1, 2]) {
+      const L = lag * mult, l0 = Math.floor(L), f = L - l0;
+      let acc = 0;
+      for (let i = 0; i + l0 + 1 < n; i++) acc += on[i] * (on[i + l0] * (1 - f) + on[i + l0 + 1] * f);
+      s += acc / mult;
+    }
+    const prior = Math.exp(-0.5 * Math.pow(Math.log2(bpm / 120) / 0.9, 2)); // most songs sit near 120
+    s *= prior;
+    if (s > best.score) best = { bpm, score: s };
+  }
+  return { bpm: Math.round(best.bpm * 2) / 2 };
 }

@@ -9,7 +9,7 @@ const lfs = uxp.storage.localFileSystem;
 
 const PORT = 47321;
 const TICKS_PER_SEC = 254016000000;
-const VERSION = "0.3.2";
+const VERSION = "0.3.3";
 
 // ---------------------------------------------------------------- utils
 const $ = (id) => document.getElementById(id);
@@ -540,6 +540,57 @@ const handlers = {
     return { cuts: done, skipped, totalSec: plan.totalSec, cutEverySec: plan.cutEverySec };
   },
 
+  /** Bins and songs in the open project (for "Edit from project"). */
+  async listProjectMedia() {
+    const { project } = await ctx();
+    const VID = /\.(mp4|mov|m4v|mxf|avi|mkv|webm|mts|m2ts|r3d|braw|jpg|jpeg|png|tif|tiff|psd)$/i;
+    const AUD = /\.(wav|mp3|aif|aiff|m4a|aac|flac)$/i;
+    const bins = [], audios = [];
+    async function walk(folder, label, depth) {
+      const items = (await folder.getItems()) || [];
+      const vids = [];
+      for (const it of items) {
+        const clip = ppro.ClipProjectItem.cast(it);
+        if (clip) {
+          let p = null;
+          try { p = await clip.getMediaFilePath(); } catch (e) {}
+          if (p && AUD.test(p)) audios.push({ name: it.name || basename(p), path: p });
+          else if (p && VID.test(p)) vids.push(p);
+        }
+        const f = ppro.FolderItem.cast(it);
+        if (f && depth < 6) await walk(f, (label ? label + " / " : "") + (it.name || "Bin"), depth + 1);
+      }
+      if (vids.length) bins.push({ key: label || "(top level)", label: (label || "Project top level") + "  ·  " + vids.length + " clips", videos: vids });
+    }
+    await walk(await project.getRootItem(), "", 0);
+    return { bins, audios };
+  },
+
+  /** Place a whole edit: optional music + list of cuts. */
+  async buildEdit({ music, cuts, clipAudio = true }) {
+    const { project, seq } = await ctx();
+    const aCount = await seq.getAudioTrackCount();
+    if (music && music.path) {
+      const song = await findProjectItemByPath(project, music.path);
+      await placeRange(project, seq, song, { timeSec: music.timeSec, srcIn: music.sourceInSec || 0, srcOut: (music.sourceInSec || 0) + music.durationSec, vTrack: 0, aTrack: music.audioTrack || 0, insert: false });
+      try { tx(project, "Clear in/out", () => [song.createClearInOutPointsAction()]); } catch (e) {}
+    }
+    const items = {};
+    let done = 0, skipped = 0;
+    for (const c of cuts || []) {
+      try {
+        const clip = items[c.mediaPath] || (items[c.mediaPath] = await findProjectItemByPath(project, c.mediaPath));
+        const aT = c.audioTrack != null ? c.audioTrack : clipAudio && aCount > 1 ? 1 : null;
+        await placeRange(project, seq, clip, { timeSec: c.timeSec, srcIn: c.sourceInSec, srcOut: c.sourceOutSec, vTrack: c.videoTrack || 0, aTrack: aT, insert: false });
+        done++;
+        if (done % 5 === 0) toast(`Building edit: ${done} / ${cuts.length} cuts…`, "ok");
+      } catch (e) { skipped++; log("Skipped a cut from " + basename(c.mediaPath) + ": " + e.message, true); }
+    }
+    for (const c of Object.values(items)) { try { tx(project, "Clear in/out", () => [c.createClearInOutPointsAction()]); } catch (e) {} }
+    toast(`Edit built ✔ ${done} cuts${skipped ? ", " + skipped + " skipped" : ""}`, skipped ? "err" : "ok");
+    return { cuts: done, skipped };
+  },
+
   async macro({ steps }) {
     const out = [];
     for (const s of steps || []) out.push(await runAction(s.action, s.params || {}));
@@ -745,6 +796,89 @@ $("generate").addEventListener("click", async () => {
   }
 });
 $("openFolder").addEventListener("click", () => bridgeCall("openGapFolder", { id: currentGapId }).catch((e) => log(e.message, true)));
+// ---------------------------------------------------------------- Edit from project
+let PE = { bins: [], audios: [] };
+async function peRefresh() {
+  try {
+    PE = await handlers.listProjectMedia();
+    setPickOptions("peBin", PE.bins.map((b) => ({ value: b.key, label: b.label })));
+    setPickOptions("peSong", PE.audios.map((a) => ({ value: a.path, label: a.name })));
+    if (!PE.bins.find((b) => b.key === getPick("peBin")) && PE.bins[0]) setPick("peBin", PE.bins[0].key);
+    if (!PE.audios.find((a) => a.path === getPick("peSong")) && PE.audios[0]) { setPick("peSong", PE.audios[0].path); peLoadBpm(); }
+    if (!PE.bins.length) toast("No video clips found in this project's bins.", "err");
+    else if (!PE.audios.length) toast("No music (WAV/MP3/AIFF/M4A) in this project yet. Import a song first.", "err");
+  } catch (e) { log(e.message, true); }
+}
+async function peLoadBpm() {
+  const song = getPick("peSong");
+  if (!song) return;
+  try { const b = await bridgeCall("getAudioBpm", { path: song }); $("peBpm").value = b || ""; } catch (e) {}
+}
+function peSaveBpm() { const song = getPick("peSong"), b = Number($("peBpm").value); if (song && b) bridgeCall("setAudioBpm", { path: song, bpm: b }).catch(() => {}); }
+onPick("peSong", () => peLoadBpm());
+$("peBpm").addEventListener("change", peSaveBpm);
+$("peHalf").addEventListener("click", () => { const b = Number($("peBpm").value); if (b) { $("peBpm").value = b / 2; peSaveBpm(); } });
+$("peDouble").addEventListener("click", () => { const b = Number($("peBpm").value); if (b) { $("peBpm").value = b * 2; peSaveBpm(); } });
+$("peRefresh").addEventListener("click", peRefresh);
+$("peDetect").addEventListener("click", async () => {
+  const song = getPick("peSong");
+  if (!song) return toast("Choose a song first.", "err");
+  toast("Listening to the song to find its BPM…", "ok");
+  try { const r = await bridgeCall("detectBpm", { path: song }, null, 120000); $("peBpm").value = r.bpm; toast(`Detected about ${r.bpm} BPM. If the cuts feel twice too fast or slow, press ½ or ×2.`, "ok"); }
+  catch (e) { log(e.message, true); }
+});
+function peInputs() {
+  const bin = PE.bins.find((b) => b.key === getPick("peBin"));
+  const song = getPick("peSong");
+  const bpm = Number($("peBpm").value);
+  if (!bin) throw new Error("Choose the footage bin (press ↻ Refresh if the list is empty).");
+  if (!song) throw new Error("Choose the music.");
+  if (!bpm) throw new Error("Set the song's BPM (or press Detect).");
+  const preset = (CONFIG && CONFIG.presets[getPick("presetSelect")]) || {};
+  return { bin, song, bpm, preset, presetName: getPick("presetSelect") };
+}
+$("peQuick").addEventListener("click", async () => {
+  try {
+    const { bin, song, bpm, preset } = peInputs();
+    const { seq } = await ctx();
+    const info = await seqInfo(seq);
+    toast("Planning the cut…", "ok");
+    const plan = await bridgeCall("planAutoEdit", { files: bin.videos, music: song, bpm, beatsPerCut: preset.beatsPerCut || 2, lengthSec: preset.lengthSec || 0, startSec: info.playheadSec, shuffle: $("pShuffle").checked }, null, 180000);
+    await handlers.buildEdit({ music: { path: song, timeSec: info.playheadSec, durationSec: plan.totalSec }, cuts: plan.segments.map((g) => ({ mediaPath: g.path, timeSec: g.timeSec, sourceInSec: g.srcIn, sourceOutSec: g.srcOut })) });
+  } catch (e) { log(e.message, true); }
+});
+$("peClaude").addEventListener("click", async () => {
+  try {
+    const { bin, song, bpm, preset, presetName } = peInputs();
+    const ask = $("pePrompt").value.trim() || "Make a clean, energetic edit cut on the beat.";
+    toast("Reading clip lengths…", "ok");
+    const clips = await bridgeCall("scanFiles", { paths: bin.videos }, null, 180000);
+    const { seq } = await ctx();
+    const info = await seqInfo(seq);
+    const list = clips.slice(0, 120).map((c) => `- ${c.path} (${c.isImage ? "still image" : c.durationSec ? c.durationSec.toFixed(2) + " s" : "unknown length"})`).join("\n");
+    const msg =
+`Build an edit in the active Premiere sequence with KawKaw's premiere_build_edit tool (one call with the whole cut list, music included).
+
+My request: ${ask}
+
+Footage (bin "${bin.key}"):
+${list}
+
+Music: ${song}
+Tempo: ${bpm} BPM → one beat = ${(60 / bpm).toFixed(4)} s, one bar = ${(240 / bpm).toFixed(4)} s.
+Start at the playhead: ${info.playheadSec.toFixed(3)} s. Sequence: ${info.name}, ${info.fps} fps.
+Preset "${presetName}": length ${preset.lengthSec ? preset.lengthSec + " s" : "whole song"}, default cut every ${preset.beatsPerCut || 2} beats. Rules: ${preset.rules || "none"}
+Cut exactly on beat times (start + n × beat). Keep each cut inside its clip's length. Video on V1 (videoTrack 0), music on A1, clips' own audio on A2.
+If you need to see shots before choosing, you may use premiere_export_frame after placing, but plan from the file names and lengths first. When done, tell me in 2–3 lines what you built.`;
+    showTab("chat");
+    chatAdd("you", `Edit from project: ${bin.key} + ${basename(song)} @ ${bpm} BPM\n“${ask}”`);
+    setChatBusy(true);
+    await bridgeCall("assistantSend", { sessionId: CHAT_SESSION, text: msg });
+  } catch (e) { log(e.message, true); setChatBusy(false); }
+});
+// fill the lists when the Presets tab opens
+Array.prototype.forEach.call(document.querySelectorAll(".tab"), (t) => t.addEventListener("click", () => { if (t.getAttribute("data-tab") === "presets" && !PE.bins.length) peRefresh(); }));
+
 // ---------------------------------------------------------------- AI videos folder per project
 let PROJECT_PATH = null, PROJECT_FOLDER = null;
 async function refreshProjectFolder() {

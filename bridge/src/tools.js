@@ -4,7 +4,7 @@ import fs from "node:fs";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-export const VERSION = "0.3.2";
+export const VERSION = "0.3.3";
 
 const text = (v) => ({ content: [{ type: "text", text: typeof v === "string" ? v : JSON.stringify(v, null, 2) }] });
 const fail = (e) => ({ content: [{ type: "text", text: "Error: " + e.message }], isError: true });
@@ -90,6 +90,11 @@ export function createServer(call, { client = "claude" } = {}) {
     thresholdDb: z.number().optional(), minSilenceSec: z.number().optional(), paddingSec: z.number().optional(), dryRun: z.boolean().optional().describe("true = only report what would be cut"),
   }, async (a) => text(await call("premiere", "removeAudioGaps", a, 600000)));
 
+  tool(server, "premiere_build_edit", "Lay out a whole edit in one call: music (optional) plus a cut list. Each cut takes a source range of a media file and places it at a timeline time (overwrite). Use this for beat-cut edits: compute times from the BPM (one beat = 60/BPM s).", {
+    music: z.object({ path: z.string(), timeSec: z.number(), sourceInSec: z.number().optional(), durationSec: z.number(), audioTrack: z.number().int().min(0).optional() }).optional(),
+    cuts: z.array(z.object({ mediaPath: z.string(), timeSec: z.number(), sourceInSec: z.number(), sourceOutSec: z.number(), videoTrack: z.number().int().min(0).optional(), audioTrack: z.number().int().min(0).optional() })).max(1500),
+    clipAudio: z.boolean().optional().describe("false = don't place the clips' own audio (default true, goes to A2)"),
+  }, async (a) => text(await call("premiere", "buildEdit", a, 900000)));
   tool(server, "premiere_auto_edit_folder", "Auto-edit: cut every clip in a folder to the beat of a music track, starting at the playhead (V1 video, music on A1, clip audio on A2). Uses the preset's BPM / beatsPerCut / lengthSec unless given.", {
     folder: z.string().describe("Folder with the footage"), music: z.string().describe("Music file path"),
     preset: z.string().optional(), bpm: z.number().optional(), beatsPerCut: z.number().optional(), lengthSec: z.number().optional().describe("0 = whole song"), shuffle: z.boolean().optional(),

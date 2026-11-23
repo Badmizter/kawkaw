@@ -81,6 +81,14 @@ Good to know:
 - The link is secret. Anyone who has it can control Premiere/AE while KawKaw is running. **New link** makes the old one stop working.
 - OpenAI decides which plans can use custom apps and whether they can *edit* (write) or only *read*. If ChatGPT only shows the read tools (timeline, frames, presets, gaps), your plan is limited to read-only.
 
+## Edit from project (bins + song + your prompt)
+
+Panel → **Presets** → **Edit from project**:
+1. **Footage bin:** pick one of your project's bins.
+2. **Music:** pick a song already imported in the project. Set its **BPM**, or press **Detect** (use **½ / ×2** if it lands on half or double time). KawKaw remembers the BPM per song.
+3. **How do you want it edited?** Describe it, e.g. *"30 s ad, slow 4-beat shots at the start, every beat in the chorus, end on the logo"*.
+4. **Edit with Claude** follows your prompt and the preset rules and builds the whole cut list in one go. **Quick cut** just cuts on the beat, no AI needed.
+
 ## Auto-edit: folder + music → cut to the beat
 
 Panel → **Presets** → choose a preset (e.g. **Ad / Commercial**) → set the **BPM**, how many beats per cut, and the length (whole song, 15, 30 or 60 s) → **Folder + Music → Edit**. Pick the footage folder and the song. KawKaw lays the clips on V1, cut on the beat from the playhead, with the music on A1 and the clips' own audio on A2. Each cut uses a fresh part of its clip, so shots don't repeat. Tick **Shuffle** for a random order. There's also an **Auto-Edit** button in the Buttons tab, and Claude can do it from the Chat tab.

@@ -8,7 +8,7 @@ import { WebSocketServer } from "ws";
 import { loadConfig, saveConfig, publicConfig, DIRS, HOME_DIR, PORT, CONFIG_PATH } from "./config.js";
 import { detectSilence } from "./silence.js";
 import { generateForGap, testProvider } from "./ai.js";
-import { planAutoEdit, scanFolder } from "./autoedit.js";
+import { planAutoEdit, scanFolder, scanFiles, detectBpm } from "./autoedit.js";
 import { runAEScript, buildRangeCompScript } from "./ae.js";
 import { chatgptInfo, startTunnel, handleMcpHttp, newToken } from "./chatgpt.js";
 import { readInvite } from "./hubclient.js";
@@ -16,7 +16,7 @@ import { sendMessage, resetSession, stopSession, assistantStatus, findClaudeCode
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GAPS_PATH = path.join(HOME_DIR, "gaps.json");
-const VERSION = "0.3.2";
+const VERSION = "0.3.3";
 
 let config = loadConfig();
 const hosts = new Map(); // role -> ws  (premiere, ae)
@@ -124,6 +124,10 @@ const bridge = {
     return dir;
   },
   scanFolder: ({ path: p }) => scanFolder(p),
+  scanFiles: ({ paths }) => scanFiles(paths),
+  detectBpm: async ({ path: p }) => { const r = await detectBpm(p); config.audioBpm = config.audioBpm || {}; config.audioBpm[p] = r.bpm; saveConfig(config); return r; },
+  getAudioBpm: ({ path: p }) => (config.audioBpm || {})[p] || null,
+  setAudioBpm: ({ path: p, bpm }) => { config.audioBpm = config.audioBpm || {}; config.audioBpm[p] = Number(bpm); saveConfig(config); return config.audioBpm[p]; },
   framesDir: () => ({ dir: DIRS.frames, sep: path.sep }),
   waitForFile: async ({ path: p, timeoutMs = 20000 }) => {
     const t0 = Date.now();

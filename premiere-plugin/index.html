@@ -109,7 +109,27 @@
       <button id="applyTracks" class="primary">Name tracks</button>
       <button id="beatMarkers" class="ghost">Beat markers In→Out</button>
     </div>
-    <div class="sub">Auto-edit</div>
+    <div class="sub">Edit from project</div>
+    <div class="hint">1 · Footage bin</div>
+    <div id="peBin" class="picker list"></div>
+    <div class="hint">2 · Music</div>
+    <div id="peSong" class="picker list"></div>
+    <div class="row">
+      <label>Song BPM</label><input id="peBpm" type="number" min="30" max="300" step="0.5" style="width:70px">
+      <button id="peDetect" class="ghost sm">Detect</button>
+      <button id="peHalf" class="ghost sm">½</button>
+      <button id="peDouble" class="ghost sm">×2</button>
+      <button id="peRefresh" class="ghost sm">↻ Refresh</button>
+    </div>
+    <div class="hint">3 · How do you want it edited?</div>
+    <textarea id="pePrompt" placeholder="e.g. 30 s ad, start with the product hero shot, fast cuts on every beat in the chorus, slow 4-beat shots at the start, end on the logo"></textarea>
+    <div class="row">
+      <button id="peClaude" class="primary">Edit with Claude</button>
+      <button id="peQuick" class="ghost">Quick cut (no AI)</button>
+    </div>
+    <div class="hint">Builds the edit from the playhead in the active sequence. Use an empty sequence so nothing is overwritten. Length and cut speed come from the preset above.</div>
+
+    <div class="sub">Auto-edit from a folder on disk</div>
     <div class="row">
       <button id="autoEdit" class="primary">Folder + Music → Edit</button>
       <label class="chk"><input type="checkbox" id="pShuffle"> Shuffle clips</label>
