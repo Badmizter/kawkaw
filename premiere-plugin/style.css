@@ -50,3 +50,11 @@ button.sm { padding: 3px 6px; font-size: 11px; }
 .picker .pick.on { background: #9b5cff; color: #fff; border-color: #b88cff; }
 .picker.list { flex-direction: column; flex-wrap: nowrap; }
 .picker.list .pick { margin-right: 0; }
+
+.chatlog { height: 340px; overflow-y: auto; background: #0c0a14; border: 1px solid #2a2442; border-radius: 6px; padding: 8px; }
+.msg { margin: 0 0 8px; padding: 7px 9px; border-radius: 8px; white-space: pre-wrap; line-height: 1.4; font-size: 12px; }
+.msg.you { background: #2a1f4d; color: #ece6ff; margin-left: 30px; }
+.msg.claude { background: #17151f; color: #e6e4e0; margin-right: 20px; }
+.msg.tool { background: transparent; color: #7f7a96; font-size: 11px; padding: 1px 9px; margin: 0 0 4px; }
+.msg.err { background: #4d1f1f; color: #ffd2cc; }
+.msg.thinking { color: #9b8cd6; background: transparent; font-style: italic; }

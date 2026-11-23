@@ -11,10 +11,11 @@ import { generateForGap, testProvider } from "./ai.js";
 import { runAEScript, buildRangeCompScript } from "./ae.js";
 import { chatgptInfo, startTunnel, handleMcpHttp, newToken } from "./chatgpt.js";
 import { readInvite } from "./hubclient.js";
+import { sendMessage, resetSession, stopSession, assistantStatus, findClaudeCode } from "./assistant.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GAPS_PATH = path.join(HOME_DIR, "gaps.json");
-const VERSION = "0.2.4";
+const VERSION = "0.3.0";
 
 let config = loadConfig();
 const hosts = new Map(); // role -> ws  (premiere, ae)
@@ -156,6 +157,16 @@ const bridge = {
     return r;
   },
 
+  assistantStatus: () => assistantStatus(config),
+  assistantSend: ({ sessionId, text }) => {
+    if (!text?.trim()) throw new Error("Type a message first.");
+    const sid = sessionId || "panel";
+    sendMessage(config, localCall, { sessionId: sid, text }, (ev) => broadcast("assistant", { sessionId: sid, ...ev }))
+      .catch((e) => { broadcast("assistant", { sessionId: sid, type: "error", text: e.message }); broadcast("assistant", { sessionId: sid, type: "done" }); });
+    return { started: true, mode: assistantStatus(config).mode };
+  },
+  assistantStop: ({ sessionId }) => stopSession(sessionId || "panel"),
+  assistantReset: ({ sessionId }) => { resetSession(sessionId || "panel"); return true; },
   aeRun: ({ code, timeoutMs }) => runAEScript(config, code, { timeoutMs }),
   aeSendRange: (range) => runAEScript(config, buildRangeCompScript(range)),
 };
@@ -251,6 +262,7 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === "/logo.png") { res.writeHead(200, { "Content-Type": "image/png" }); return fs.createReadStream(path.join(__dirname, "logo.png")).pipe(res); }
   if (url.pathname === "/api/status") return sendJson(res, 200, bridge.ping());
   if (url.pathname === "/api/shutdown" && req.method === "POST") { sendJson(res, 200, { ok: true }); log("shutting down"); setTimeout(() => process.exit(0), 200); return; }
+  if (url.pathname === "/api/assistant" && req.method === "GET") { findClaudeCode(true); return sendJson(res, 200, assistantStatus(config)); }
   if (url.pathname === "/api/test-provider" && req.method === "POST") {
     const { provider } = JSON.parse((await readBody(req)) || "{}");
     return sendJson(res, 200, await testProvider(config, provider));
@@ -282,6 +294,7 @@ const server = http.createServer(async (req, res) => {
       incoming.ai.higgsfield.keySecret = keep(incoming.ai.higgsfield.keySecret, config.ai.higgsfield.keySecret);
       incoming.ai.kling.apiKey = keep(incoming.ai.kling.apiKey, config.ai.kling.apiKey);
       incoming.chatgpt = config.chatgpt; // managed through /api/chatgpt
+      if (incoming.assistant) incoming.assistant.apiKey = keep(incoming.assistant.apiKey, config.assistant.apiKey);
       config = incoming;
       saveConfig(config);
       broadcast("config", publicConfig(config));

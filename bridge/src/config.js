@@ -49,6 +49,12 @@ export const DEFAULT_CONFIG = {
     frameWidth: 1920,
     frameHeight: 1080,
   },
+  assistant: {
+    mode: "auto", // "auto" = Claude Code if installed, else API key | "claude-code" | "api"
+    apiKey: "", // Anthropic API key (console.anthropic.com) — only for "api" mode
+    model: "claude-sonnet-5-5", // API model (claude-haiku-5-5 is cheaper)
+    claudeCodeModel: "", // optional model for Claude Code (empty = your default)
+  },
   chatgpt: {
     enabled: false,
     mode: "quick", // "quick" = free Cloudflare link (changes on restart) | "custom" = own domain, tunnel on this computer | "server" = through your home server's tunnel | "hub" = join a KawKaw Hub with an invite
@@ -149,6 +155,7 @@ export function publicConfig(cfg) {
   c.ai.higgsfield.keySecret = mask(c.ai.higgsfield.keySecret);
   c.ai.kling.apiKey = mask(c.ai.kling.apiKey);
   c.chatgpt.token = mask(c.chatgpt.token);
+  c.assistant.apiKey = mask(c.assistant.apiKey);
   c.chatgpt.tunnelToken = mask(c.chatgpt.tunnelToken);
   c.chatgpt.hubInvite = mask(c.chatgpt.hubInvite);
   return c;

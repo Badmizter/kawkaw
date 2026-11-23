@@ -9,7 +9,7 @@ const lfs = uxp.storage.localFileSystem;
 
 const PORT = 47321;
 const TICKS_PER_SEC = 254016000000;
-const VERSION = "0.2.4";
+const VERSION = "0.3.0";
 
 // ---------------------------------------------------------------- utils
 const $ = (id) => document.getElementById(id);
@@ -190,7 +190,7 @@ function connect() {
   ws.onmessage = async (ev) => {
     let m;
     try { m = JSON.parse(ev.data); } catch (e) { return; }
-    if (m.type === "welcome") { CONFIG = m.config; APP_VERSION = m.version; $("conn").textContent = "connected · app " + m.version + " · panel " + VERSION; renderConfig(); }
+    if (m.type === "welcome") { setTimeout(refreshChatMode, 0); CONFIG = m.config; APP_VERSION = m.version; $("conn").textContent = "connected · app " + m.version + " · panel " + VERSION; renderConfig(); }
     else if (m.type === "result" && waiting[m.id]) {
       const w = waiting[m.id]; delete waiting[m.id];
       m.ok ? w.resolve(m.data) : w.reject(new Error(m.error));
@@ -206,10 +206,11 @@ function connect() {
         log("✗ " + m.method + ": " + (e.message || e), true);
       }
     } else if (m.type === "event") {
-      if (m.name === "config") { CONFIG = m.data; renderConfig(); }
+      if (m.name === "config") { CONFIG = m.data; renderConfig(); refreshChatMode(); }
       if (m.name === "gap") onGapEvent(m.data);
       if (m.name === "gapDeleted") refreshGaps();
       if (m.name === "hosts") HOSTS = m.data;
+      if (m.name === "assistant") onAssistantEvent(m.data);
     }
   };
 }
@@ -675,6 +676,58 @@ $("generate").addEventListener("click", async () => {
   }
 });
 $("openFolder").addEventListener("click", () => bridgeCall("openGapFolder", { id: currentGapId }).catch((e) => log(e.message, true)));
+// ---------------------------------------------------------------- Chat with Claude
+const CHAT_SESSION = "panel";
+let chatBusy = false, thinkingEl = null;
+function chatAdd(kind, text) {
+  const d = document.createElement("div");
+  d.className = "msg " + kind;
+  d.textContent = text;
+  const log = $("chatLog");
+  if (thinkingEl && thinkingEl.parentNode) log.insertBefore(d, thinkingEl); else log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+  return d;
+}
+function setChatBusy(b) {
+  chatBusy = b;
+  $("chatSend").disabled = b;
+  $("chatSend").textContent = b ? "Working…" : "Send";
+  if (b && !thinkingEl) thinkingEl = chatAdd("thinking", "Claude is working…");
+  if (!b && thinkingEl) { if (thinkingEl.parentNode) thinkingEl.parentNode.removeChild(thinkingEl); thinkingEl = null; }
+}
+const TOOL_LABELS = { premiere_get_timeline: "reading the timeline", premiere_export_frame: "looking at a frame", premiere_add_markers: "adding markers", premiere_add_beat_markers: "adding beat markers", premiere_apply_preset_tracks: "naming tracks", premiere_trim_item: "trimming a clip", premiere_move_item: "moving a clip", premiere_remove_items: "removing clips", premiere_place_media: "placing media", premiere_place_clip_segments: "cutting segments", premiere_remove_audio_gaps: "removing audio gaps", premiere_set_in_out: "setting In/Out", gap_generate: "starting AI generation", gap_update: "updating the AI clip", gap_get: "looking at the AI clip frames", ae_run_script: "working in After Effects", ae_send_in_out_range: "sending to After Effects" };
+function onAssistantEvent(ev) {
+  if (ev.sessionId !== CHAT_SESSION) return;
+  if (ev.type === "text") chatAdd("claude", ev.text);
+  else if (ev.type === "tool") chatAdd("tool", "• " + (TOOL_LABELS[ev.name] || ev.name));
+  else if (ev.type === "error") chatAdd("err", ev.text);
+  else if (ev.type === "done") { if (ev.stopped) chatAdd("tool", "• stopped"); setChatBusy(false); }
+}
+async function refreshChatMode() {
+  try {
+    const a = await bridgeCall("assistantStatus");
+    $("chatMode").textContent = a.mode === "claude-code" ? "Claude · using your Claude login (Claude Code)" : a.mode === "api" ? "Claude · API key · " + a.model : "Not set up yet: install Claude Code (and log in once) or add an API key in Settings → Assistant.";
+  } catch (e) {}
+}
+async function chatSend() {
+  const text = $("chatInput").value.trim();
+  if (!text || chatBusy) return;
+  chatAdd("you", text);
+  $("chatInput").value = "";
+  setChatBusy(true);
+  try { await bridgeCall("assistantSend", { sessionId: CHAT_SESSION, text }); }
+  catch (e) { chatAdd("err", e.message); setChatBusy(false); }
+}
+$("chatSend").addEventListener("click", chatSend);
+$("chatInput").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); chatSend(); } });
+$("chatStop").addEventListener("click", () => bridgeCall("assistantStop", { sessionId: CHAT_SESSION }).catch((e) => log(e.message, true)));
+$("chatNew").addEventListener("click", async () => {
+  try { await bridgeCall("assistantReset", { sessionId: CHAT_SESSION }); } catch (e) {}
+  $("chatLog").innerHTML = ""; setChatBusy(false);
+  chatAdd("claude", "New chat. What should we work on?");
+});
+chatAdd("claude", "Hi! I can read and edit your timeline, name tracks with your presets, add beat markers, remove audio gaps, set up AI clips and work in After Effects. What should we do?");
+
 $("place").addEventListener("click", () => bridgeCall("placeGap", { id: currentGapId }).then(() => log("Placed")).catch((e) => log(e.message, true)));
 $("deleteGap").addEventListener("click", () => bridgeCall("deleteGap", { id: currentGapId }).then(() => { currentGapId = null; refreshGaps(); }).catch((e) => log(e.message, true)));
 

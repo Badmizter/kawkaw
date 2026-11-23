@@ -1,6 +1,6 @@
 {
   "name": "kawkaw",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "Connect Claude to Premiere Pro and After Effects with custom buttons, music-video presets, audio-gap removal and AI gap fill (Kling / Higgsfield).",
   "type": "module",
   "license": "MIT",

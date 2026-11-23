@@ -4,7 +4,7 @@ import fs from "node:fs";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-export const VERSION = "0.2.4";
+export const VERSION = "0.3.0";
 
 const text = (v) => ({ content: [{ type: "text", text: typeof v === "string" ? v : JSON.stringify(v, null, 2) }] });
 const fail = (e) => ({ content: [{ type: "text", text: "Error: " + e.message }], isError: true });

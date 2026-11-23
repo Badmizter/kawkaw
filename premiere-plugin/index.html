@@ -14,13 +14,27 @@
   <div id="toast" class="toast hidden"></div>
 
   <div class="tabs">
-    <div class="tab active" data-tab="buttons">Buttons</div>
+    <div class="tab active" data-tab="chat">Chat</div>
+    <div class="tab" data-tab="buttons">Buttons</div>
     <div class="tab" data-tab="ai">AI Fill</div>
     <div class="tab" data-tab="presets">Presets</div>
   </div>
 
+  <!-- CHAT -->
+  <div class="page" id="page-chat">
+    <div id="chatMode" class="hint" style="margin:0 0 6px"></div>
+    <div id="chatLog" class="chatlog"></div>
+    <textarea id="chatInput" placeholder="Ask Claude… e.g. “Name my tracks with the multicam preset and add beat markers between In and Out”"></textarea>
+    <div class="row">
+      <button id="chatSend" class="primary">Send</button>
+      <button id="chatStop" class="ghost">Stop</button>
+      <button id="chatNew" class="ghost">New chat</button>
+      <span class="hint">Ctrl+Enter to send</span>
+    </div>
+  </div>
+
   <!-- BUTTONS -->
-  <div class="page" id="page-buttons">
+  <div class="page hidden" id="page-buttons">
     <div id="buttonGrid" class="grid"></div>
     <div class="sub">Gap removal</div>
     <div class="row">

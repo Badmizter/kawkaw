@@ -81,6 +81,14 @@ Good to know:
 - The link is secret. Anyone who has it can control Premiere/AE while KawKaw is running. **New link** makes the old one stop working.
 - OpenAI decides which plans can use custom apps and whether they can *edit* (write) or only *read*. If ChatGPT only shows the read tools (timeline, frames, presets, gaps), your plan is limited to read-only.
 
+## Chat with Claude inside Premiere
+
+The panel's **Chat** tab lets you talk to Claude without leaving Premiere. Claude uses the same tools: it reads the timeline, names tracks, adds markers, cuts, removes audio gaps, sets up AI clips and drives After Effects.
+
+It reaches Claude in one of two ways (KawKaw settings → **Assistant**):
+- **Your Claude login through Claude Code** (recommended, uses your Claude plan). Install Claude Code from claude.com/claude-code, open a terminal, run `claude` once and log in. KawKaw finds it automatically.
+- **An Anthropic API key** from console.anthropic.com. Pay per use, billed separately from Claude plans.
+
 ## Using it (Claude or ChatGPT)
 
 Things you can say:
