@@ -92,11 +92,23 @@
   <!-- PRESETS -->
   <div class="page hidden" id="page-presets">
     <div id="presetSelect" class="picker"></div>
+    <div class="row">
+      <label>BPM</label><input id="pBpm" type="number" min="30" max="300" step="0.5" style="width:70px">
+      <label>Cut every</label><input id="pCut" type="number" min="0.5" max="32" step="0.5" style="width:56px"><label>beats</label>
+      <label>Marker every</label><input id="pMark" type="number" min="1" max="32" step="1" style="width:56px"><label>beats</label>
+    </div>
+    <div class="row"><label>Ad length</label><div id="pLen" class="picker"></div></div>
     <div id="presetView" class="presetView"></div>
     <div class="row">
       <button id="applyTracks" class="primary">Name tracks</button>
       <button id="beatMarkers" class="ghost">Beat markers In→Out</button>
     </div>
+    <div class="sub">Auto-edit</div>
+    <div class="row">
+      <button id="autoEdit" class="primary">Folder + Music → Edit</button>
+      <label class="chk"><input type="checkbox" id="pShuffle"> Shuffle clips</label>
+    </div>
+    <div class="hint">Pick a folder of footage and a song. KawKaw cuts the clips to the beat starting at the playhead: video on V1, music on A1, clip audio on A2. Use an empty sequence (or put the playhead at the end) so nothing gets overwritten.</div>
     <div class="hint">Ask Claude to “cut V1–V4 to the beat using my preset” — it reads these rules.</div>
   </div>
 

@@ -88,6 +88,28 @@ export const DEFAULT_CONFIG = {
       rules:
         "Open cinematic: hold Wide Master or Drone for 2–4 bars. Verses favour Close-Up Master, cut every 2 bars. Choruses cut every bar, mix Wide + Performance Alt + B-Roll. Never cut off-beat unless on a hit.",
     },
+    "Ad / Commercial": {
+      description: "Commercials and social ads (15/30/60 s), fast and clean",
+      tracks: {
+        V1: "Hero Shots",
+        V2: "Product Close-Ups",
+        V3: "Lifestyle / B-Roll",
+        V4: "Talent / Testimonial",
+        V5: "Text & Graphics",
+        V6: "Logo / End Card",
+        V7: "AI Fill",
+        A1: "Music",
+        A2: "Clip Audio",
+        A3: "Voice-Over",
+        A4: "SFX",
+      },
+      bpm: 120,
+      beatsPerMarker: 2,
+      beatsPerCut: 2,
+      lengthSec: 30,
+      rules:
+        "Hook in the first 2 seconds with the strongest hero or product shot. Cut every 2 beats; on drops or the chorus cut every beat. Show the product clearly at least every 5 seconds. Keep text on screen at least 1.5 s. Last 3 seconds: logo / end card held on V6 with the music resolving. Prefer motion-matched cuts; no shot repeats unless it's the product hero.",
+    },
     "Concert – Live": {
       description: "Live concert edit, angles on V1–V7",
       tracks: { V1: "Stage Wide", V2: "Singer CU", V3: "Band", V4: "Crowd", V5: "Drone", V6: "B-Roll", V7: "AI Fill", A1: "Board Mix" },
@@ -103,6 +125,7 @@ export const DEFAULT_CONFIG = {
     { id: "names", label: "Name Tracks (Preset)", action: "applyPresetTracks", params: { preset: "Music Video – Multicam" }, color: "#2f9e72" },
     { id: "beats", label: "Beat Markers In→Out", action: "addBeatMarkers", params: { preset: "Music Video – Multicam" }, color: "#2f7ee8" },
     { id: "toae", label: "Send In/Out to AE", action: "sendRangeToAE", params: {}, color: "#9a5cd6" },
+    { id: "autoedit", label: "Auto-Edit: Folder + Music", action: "autoEditFolder", params: { preset: "Ad / Commercial" }, color: "#e0a019" },
   ],
 };
 
@@ -133,6 +156,14 @@ export function loadConfig() {
     const merged = deepMerge(DEFAULT_CONFIG, user);
     if (user.presets) merged.presets = user.presets;
     if (user.buttons) merged.buttons = user.buttons;
+    // one-time additions for people upgrading (never overwrites their own presets/buttons)
+    merged.migrations = merged.migrations || {};
+    if (!merged.migrations.adPreset) {
+      if (!merged.presets["Ad / Commercial"]) merged.presets["Ad / Commercial"] = structuredClone(DEFAULT_CONFIG.presets["Ad / Commercial"]);
+      if (!merged.buttons.some((b) => b.action === "autoEditFolder")) merged.buttons.push(structuredClone(DEFAULT_CONFIG.buttons.find((b) => b.action === "autoEditFolder")));
+      merged.migrations.adPreset = true;
+      saveConfig(merged);
+    }
     if (!merged.chatgpt.token) { merged.chatgpt.token = crypto.randomBytes(18).toString("base64url"); saveConfig(merged); }
     return merged;
   } catch (e) {

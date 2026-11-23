@@ -8,6 +8,7 @@ import { WebSocketServer } from "ws";
 import { loadConfig, saveConfig, publicConfig, DIRS, HOME_DIR, PORT, CONFIG_PATH } from "./config.js";
 import { detectSilence } from "./silence.js";
 import { generateForGap, testProvider } from "./ai.js";
+import { planAutoEdit, scanFolder } from "./autoedit.js";
 import { runAEScript, buildRangeCompScript } from "./ae.js";
 import { chatgptInfo, startTunnel, handleMcpHttp, newToken } from "./chatgpt.js";
 import { readInvite } from "./hubclient.js";
@@ -15,7 +16,7 @@ import { sendMessage, resetSession, stopSession, assistantStatus, findClaudeCode
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GAPS_PATH = path.join(HOME_DIR, "gaps.json");
-const VERSION = "0.3.0";
+const VERSION = "0.3.1";
 
 let config = loadConfig();
 const hosts = new Map(); // role -> ws  (premiere, ae)
@@ -94,6 +95,8 @@ const bridge = {
   deletePreset: ({ name }) => { delete config.presets[name]; saveConfig(config); broadcast("config", publicConfig(config)); return true; },
   saveButtons: ({ buttons }) => { config.buttons = buttons; saveConfig(config); broadcast("config", publicConfig(config)); return true; },
   detectSilence: (p) => detectSilence({ ...config.silence, ...p }),
+  planAutoEdit: (p) => planAutoEdit(p),
+  scanFolder: ({ path: p }) => scanFolder(p),
   framesDir: () => ({ dir: DIRS.frames, sep: path.sep }),
   waitForFile: async ({ path: p, timeoutMs = 20000 }) => {
     const t0 = Date.now();

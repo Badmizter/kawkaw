@@ -9,7 +9,7 @@ const lfs = uxp.storage.localFileSystem;
 
 const PORT = 47321;
 const TICKS_PER_SEC = 254016000000;
-const VERSION = "0.3.0";
+const VERSION = "0.3.1";
 
 // ---------------------------------------------------------------- utils
 const $ = (id) => document.getElementById(id);
@@ -493,6 +493,50 @@ const handlers = {
     return r;
   },
 
+  async autoEditFolder({ preset, folder, music, bpm, beatsPerCut, lengthSec, shuffle }) {
+    const { project, seq } = await ctx();
+    const p = (CONFIG && CONFIG.presets[preset || getPick("presetSelect")]) || {};
+    bpm = Number(bpm || p.bpm);
+    beatsPerCut = Number(beatsPerCut || p.beatsPerCut || 2);
+    lengthSec = lengthSec != null ? Number(lengthSec) : Number(p.lengthSec || 0);
+    if (!bpm) throw new Error("Set the BPM in the Presets tab first.");
+    if (!folder) {
+      toast("Choose the folder with your footage…", "ok");
+      const f = await lfs.getFolder();
+      if (!f) return { cancelled: true };
+      folder = f.nativePath;
+    }
+    if (!music) {
+      toast("Now choose the music…", "ok");
+      const m = await lfs.getFileForOpening({ types: ["wav", "mp3", "aif", "aiff", "m4a", "aac", "flac"] });
+      if (!m) return { cancelled: true };
+      music = m.nativePath;
+    }
+    const info = await seqInfo(seq);
+    const startSec = info.playheadSec;
+    toast("Planning the cut…", "ok");
+    const plan = await bridgeCall("planAutoEdit", { folder, music, bpm, beatsPerCut, lengthSec, startSec, shuffle: !!shuffle }, null, 120000);
+    log(`Auto-edit: ${plan.segments.length} cuts from ${plan.clips} clips, a cut every ${plan.cutEverySec.toFixed(2)} s, ${plan.totalSec.toFixed(1)} s long`);
+    const aCount = await seq.getAudioTrackCount();
+    // music on A1 (video track index is ignored for audio-only files)
+    const song = await findProjectItemByPath(project, plan.music.path);
+    await placeRange(project, seq, song, { timeSec: startSec, srcIn: 0, srcOut: plan.totalSec, vTrack: 0, aTrack: 0, insert: false });
+    try { tx(project, "Clear in/out", () => [song.createClearInOutPointsAction()]); } catch (e) {}
+    const items = {};
+    let done = 0, skipped = 0;
+    for (const sgm of plan.segments) {
+      try {
+        const clip = items[sgm.path] || (items[sgm.path] = await findProjectItemByPath(project, sgm.path));
+        await placeRange(project, seq, clip, { timeSec: sgm.timeSec, srcIn: sgm.srcIn, srcOut: sgm.srcOut, vTrack: 0, aTrack: aCount > 1 ? 1 : null, insert: false });
+        done++;
+        if (done % 5 === 0) toast(`Auto-edit: ${done} / ${plan.segments.length} cuts placed…`, "ok");
+      } catch (e) { skipped++; log("Skipped " + basename(sgm.path) + ": " + e.message, true); }
+    }
+    for (const c of Object.values(items)) { try { tx(project, "Clear in/out", () => [c.createClearInOutPointsAction()]); } catch (e) {} }
+    toast(`Auto-edit done ✔ ${done} cuts${skipped ? `, ${skipped} skipped` : ""} · ${plan.totalSec.toFixed(1)} s. Undo with Ctrl+Z step by step, or delete the clips.`, skipped ? "err" : "ok");
+    return { cuts: done, skipped, totalSec: plan.totalSec, cutEverySec: plan.cutEverySec };
+  },
+
   async macro({ steps }) {
     const out = [];
     for (const s of steps || []) out.push(await runAction(s.action, s.params || {}));
@@ -527,6 +571,7 @@ window.addEventListener("error", (e) => { try { toast("Panel error: " + (e.messa
 async function runAction(action, params) {
   const fn = handlers[action];
   if (!fn) throw new Error("Unknown action: " + action);
+  if (action === "autoEditFolder") params = { shuffle: $("pShuffle").checked, ...params };
   if (action === "removeAudioGaps") {
     params = { thresholdDb: Number($("siDb").value), minSilenceSec: Number($("siMin").value), ripple: $("siRipple").checked, ...params };
   }
@@ -568,9 +613,28 @@ function renderConfig() {
   renderPreset();
 }
 
+setPickOptions("pLen", [{ value: "0", label: "Whole song" }, { value: "15", label: "15 s" }, { value: "30", label: "30 s" }, { value: "60", label: "60 s" }]);
+async function savePresetField(field, value) {
+  const name = getPick("presetSelect");
+  if (!name || !CONFIG.presets[name]) return;
+  const pr = Object.assign({}, CONFIG.presets[name]);
+  pr[field] = value;
+  CONFIG.presets[name] = pr;
+  try { await bridgeCall("savePreset", { name, preset: pr }); toast(`${name}: ${({ bpm: "BPM", beatsPerCut: "cut length", beatsPerMarker: "marker spacing", lengthSec: "ad length" })[field] || field} saved`, "ok"); } catch (e) { log(e.message, true); }
+  renderPreset();
+}
+$("pBpm").addEventListener("change", () => savePresetField("bpm", Number($("pBpm").value)));
+$("pCut").addEventListener("change", () => savePresetField("beatsPerCut", Number($("pCut").value)));
+$("pMark").addEventListener("change", () => savePresetField("beatsPerMarker", Number($("pMark").value)));
+onPick("pLen", (v) => savePresetField("lengthSec", Number(v)));
+$("autoEdit").addEventListener("click", () => handlers.autoEditFolder({ preset: getPick("presetSelect"), shuffle: $("pShuffle").checked }).catch((e) => log(e.message, true)));
 function renderPreset() {
   const p = CONFIG && CONFIG.presets[getPick("presetSelect")];
   if (!p) { $("presetView").textContent = "No presets yet."; return; }
+  if (document.activeElement !== $("pBpm")) $("pBpm").value = p.bpm || "";
+  if (document.activeElement !== $("pCut")) $("pCut").value = p.beatsPerCut || 2;
+  if (document.activeElement !== $("pMark")) $("pMark").value = p.beatsPerMarker || 4;
+  setPick("pLen", String(p.lengthSec || 0));
   const lines = Object.keys(p.tracks || {}).map((k) => `${k}  ${p.tracks[k]}`);
   $("presetView").textContent = `${lines.join("\n")}\n\n${p.bpm ? p.bpm + " BPM · marker every " + (p.beatsPerMarker || 4) + " beats\n" : ""}${p.rules || ""}`;
 }

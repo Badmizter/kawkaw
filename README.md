@@ -81,6 +81,10 @@ Good to know:
 - The link is secret. Anyone who has it can control Premiere/AE while KawKaw is running. **New link** makes the old one stop working.
 - OpenAI decides which plans can use custom apps and whether they can *edit* (write) or only *read*. If ChatGPT only shows the read tools (timeline, frames, presets, gaps), your plan is limited to read-only.
 
+## Auto-edit: folder + music → cut to the beat
+
+Panel → **Presets** → choose a preset (e.g. **Ad / Commercial**) → set the **BPM**, how many beats per cut, and the length (whole song, 15, 30 or 60 s) → **Folder + Music → Edit**. Pick the footage folder and the song. KawKaw lays the clips on V1, cut on the beat from the playhead, with the music on A1 and the clips' own audio on A2. Each cut uses a fresh part of its clip, so shots don't repeat. Tick **Shuffle** for a random order. There's also an **Auto-Edit** button in the Buttons tab, and Claude can do it from the Chat tab.
+
 ## Chat with Claude inside Premiere
 
 The panel's **Chat** tab lets you talk to Claude without leaving Premiere. Claude uses the same tools: it reads the timeline, names tracks, adds markers, cuts, removes audio gaps, sets up AI clips and drives After Effects.

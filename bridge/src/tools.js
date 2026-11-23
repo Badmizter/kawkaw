@@ -4,7 +4,7 @@ import fs from "node:fs";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-export const VERSION = "0.3.0";
+export const VERSION = "0.3.1";
 
 const text = (v) => ({ content: [{ type: "text", text: typeof v === "string" ? v : JSON.stringify(v, null, 2) }] });
 const fail = (e) => ({ content: [{ type: "text", text: "Error: " + e.message }], isError: true });
@@ -89,6 +89,11 @@ export function createServer(call, { client = "claude" } = {}) {
   tool(server, "premiere_remove_audio_gaps", "Remove silent parts from the selected clip(s) (or the clip given) and ripple the timeline. Threshold/min length default to the user's settings.", {
     thresholdDb: z.number().optional(), minSilenceSec: z.number().optional(), paddingSec: z.number().optional(), dryRun: z.boolean().optional().describe("true = only report what would be cut"),
   }, async (a) => text(await call("premiere", "removeAudioGaps", a, 600000)));
+
+  tool(server, "premiere_auto_edit_folder", "Auto-edit: cut every clip in a folder to the beat of a music track, starting at the playhead (V1 video, music on A1, clip audio on A2). Uses the preset's BPM / beatsPerCut / lengthSec unless given.", {
+    folder: z.string().describe("Folder with the footage"), music: z.string().describe("Music file path"),
+    preset: z.string().optional(), bpm: z.number().optional(), beatsPerCut: z.number().optional(), lengthSec: z.number().optional().describe("0 = whole song"), shuffle: z.boolean().optional(),
+  }, async (a) => text(await call("premiere", "autoEditFolder", a, 900000)));
 
   // ---- AI gap fill
   tool(server, "gap_create_from_in_out", "Make an AI gap from the sequence In/Out: exports the frame just before In and the frame at Out as first/last frames.", {
