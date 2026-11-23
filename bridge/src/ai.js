@@ -100,7 +100,7 @@ async function klingGenerate(cfg, gap, onUpdate) {
 }
 
 // ---------------- Manual (website + watch folder) ----------------
-async function manualGenerate(gap, onUpdate, isCancelled) {
+async function manualGenerate(gap, onUpdate, isCancelled, claimFile) {
   const dir = path.join(DIRS.inbox, gap.id);
   fs.mkdirSync(dir, { recursive: true });
   if (gap.firstFrame) fs.copyFileSync(gap.firstFrame, path.join(dir, "FIRST_FRAME" + path.extname(gap.firstFrame)));
@@ -109,12 +109,22 @@ async function manualGenerate(gap, onUpdate, isCancelled) {
     path.join(dir, "PROMPT.txt"),
     `${gap.prompt || "(no prompt yet)"}\n\nDuration needed: ${gap.durationSec.toFixed(2)} s\n\nGenerate this in Kling / Higgsfield, then save the video file into this folder. KawKaw will place it on the timeline automatically.\n`
   );
-  onUpdate(`waiting for a video file in ${dir}`);
+  const since = Date.now() - 2000;
+  onUpdate(gap.watchFolder ? `waiting for a new video in ${gap.watchFolder}` : `waiting for a video file in ${dir}`);
+  const newVideoIn = (folder, onlyNew) => {
+    try {
+      return fs.readdirSync(folder)
+        .filter((f) => VIDEO_EXT.test(f) && !f.startsWith(".") && !/\.(crdownload|part|download)$/i.test(f))
+        .map((f) => path.join(folder, f))
+        .filter((f) => !onlyNew || fs.statSync(f).mtimeMs >= since)
+        .sort((a, b) => fs.statSync(a).mtimeMs - fs.statSync(b).mtimeMs);
+    } catch { return []; }
+  };
   for (;;) {
     if (isCancelled()) throw new Error("cancelled");
-    const vid = fs.readdirSync(dir).find((f) => VIDEO_EXT.test(f));
-    if (vid) {
-      const full = path.join(dir, vid);
+    let full = newVideoIn(dir, false)[0];
+    if (!full && gap.watchFolder) full = newVideoIn(gap.watchFolder, true).find((f) => claimFile(f));
+    if (full) {
       // wait until the file stops growing (download finished)
       let size = -1;
       while (size !== fs.statSync(full).size) { if (isCancelled()) throw new Error("cancelled"); size = fs.statSync(full).size; await sleep(1500); }
@@ -124,16 +134,19 @@ async function manualGenerate(gap, onUpdate, isCancelled) {
   }
 }
 
-export async function generateForGap(config, gap, onUpdate = () => {}, isCancelled = () => false) {
+export async function generateForGap(config, gap, onUpdate = () => {}, isCancelled = () => false, claimFile = () => true) {
   const provider = gap.provider || config.ai.defaultProvider;
   let url;
   if (provider === "higgsfield") url = await higgsfieldGenerate(config.ai.higgsfield, gap, onUpdate);
   else if (provider === "kling") url = await klingGenerate(config.ai.kling, gap, onUpdate);
-  else url = await manualGenerate(gap, onUpdate, isCancelled);
+  else url = await manualGenerate(gap, onUpdate, isCancelled, claimFile);
   if (!url) throw new Error("Provider finished but returned no video URL");
-  const dest = path.join(DIRS.generated, `${gap.id}.mp4`);
+  const outDir = gap.watchFolder && fs.existsSync(gap.watchFolder) ? gap.watchFolder : DIRS.generated;
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+  const dest = path.join(outDir, `KawKaw_AI_${stamp}_${gap.id.slice(-6)}.mp4`);
   if (url.startsWith("file://")) {
     const src = url.slice(7);
+    if (gap.watchFolder && path.dirname(src) === path.resolve(gap.watchFolder)) return src; // already in the project folder: use it as is
     const ext = path.extname(src) || ".mp4";
     const d = dest.replace(/\.mp4$/, ext);
     fs.copyFileSync(src, d);

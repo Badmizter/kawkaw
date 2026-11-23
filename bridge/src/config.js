@@ -42,6 +42,7 @@ export const DEFAULT_CONFIG = {
     minSilenceSec: 0.5, // only remove gaps at least this long
     paddingSec: 0.12, // keep a little air before/after speech
   },
+  projectFolders: {}, // Premiere project file path -> folder where that project's AI videos go
   gapFill: {
     // Track (1-based, like V1) where AI clips get placed. "auto" = first empty track above the gap.
     videoTrack: "auto",

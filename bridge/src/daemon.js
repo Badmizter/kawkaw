@@ -16,7 +16,7 @@ import { sendMessage, resetSession, stopSession, assistantStatus, findClaudeCode
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GAPS_PATH = path.join(HOME_DIR, "gaps.json");
-const VERSION = "0.3.1";
+const VERSION = "0.3.2";
 
 let config = loadConfig();
 const hosts = new Map(); // role -> ws  (premiere, ae)
@@ -58,15 +58,26 @@ function callHost(role, method, params, timeoutMs = 120000) {
   });
 }
 
+const claimed = new Map(); // video file -> gap id (each new file goes to the oldest waiting AI clip)
+function claimFileFor(id) {
+  return (file) => {
+    if (claimed.has(file)) return claimed.get(file) === id;
+    const me = gaps[id];
+    const older = Object.values(gaps).some((g) => g.id !== id && g.status === "generating" && g.runProvider === "manual" && g.watchFolder === me.watchFolder && (g.startedAt || 0) < (me.startedAt || 0));
+    if (older) return false;
+    claimed.set(file, id);
+    return true;
+  };
+}
 const runTokens = {}; // id -> token of the current run (a new Generate replaces the old run)
 async function runGeneration(id) {
   const gap = gaps[id];
   if (!gap) throw new Error("Unknown gap " + id);
   const token = (runTokens[id] = Math.random().toString(36).slice(2));
   const current = () => runTokens[id] === token;
-  updateGap(id, { status: "generating", error: null, progress: "starting", cancelled: false, runProvider: gap.provider || config.ai.defaultProvider });
+  updateGap(id, { status: "generating", error: null, progress: "starting", cancelled: false, runProvider: gap.provider || config.ai.defaultProvider, startedAt: Date.now(), watchFolder: (gap.project && config.projectFolders[gap.project]) || gap.watchFolder || null });
   try {
-    const file = await generateForGap(config, gaps[id], (p) => current() && updateGap(id, { progress: p }), () => !current() || !!gaps[id]?.cancelled);
+    const file = await generateForGap(config, gaps[id], (p) => current() && updateGap(id, { progress: p }), () => !current() || !!gaps[id]?.cancelled, claimFileFor(id));
     if (!current()) return;
     updateGap(id, { status: "ready", videoPath: file, progress: "done" });
     log("gap ready", id, file);
@@ -96,6 +107,22 @@ const bridge = {
   saveButtons: ({ buttons }) => { config.buttons = buttons; saveConfig(config); broadcast("config", publicConfig(config)); return true; },
   detectSilence: (p) => detectSilence({ ...config.silence, ...p }),
   planAutoEdit: (p) => planAutoEdit(p),
+  getProjectFolder: ({ project }) => (project && config.projectFolders?.[project]) || null,
+  setProjectFolder: ({ project, folder }) => {
+    if (!project) throw new Error("Save your Premiere project first, so KawKaw can remember its folder.");
+    if (folder && !fs.existsSync(folder)) throw new Error("Folder not found: " + folder);
+    config.projectFolders = config.projectFolders || {};
+    if (folder) config.projectFolders[project] = folder; else delete config.projectFolders[project];
+    saveConfig(config);
+    return folder || null;
+  },
+  openFolder: async ({ path: dir }) => {
+    const { spawn } = await import("node:child_process");
+    if (!dir || !fs.existsSync(dir)) throw new Error("Folder not found");
+    const cmd = process.platform === "win32" ? ["explorer", [dir]] : process.platform === "darwin" ? ["open", [dir]] : ["xdg-open", [dir]];
+    spawn(cmd[0], cmd[1], { detached: true, stdio: "ignore" }).unref();
+    return dir;
+  },
   scanFolder: ({ path: p }) => scanFolder(p),
   framesDir: () => ({ dir: DIRS.frames, sep: path.sep }),
   waitForFile: async ({ path: p, timeoutMs = 20000 }) => {
@@ -112,7 +139,7 @@ const bridge = {
     const id = newId();
     gaps[id] = {
       id, createdAt: Date.now(), status: "draft", prompt: "", provider: config.ai.defaultProvider,
-      sequenceName: p.sequenceName, sequenceGuid: p.sequenceGuid, inSec: p.inSec, outSec: p.outSec,
+      sequenceName: p.sequenceName, sequenceGuid: p.sequenceGuid, project: p.project || null, inSec: p.inSec, outSec: p.outSec,
       durationSec: Math.max(0.04, (p.outSec ?? 0) - (p.inSec ?? 0)), firstFrame: p.firstFrame || null, lastFrame: p.lastFrame || null,
       videoTrack: p.videoTrack ?? config.gapFill.videoTrack, audioTrack: p.audioTrack ?? config.gapFill.audioTrack,
     };
@@ -145,7 +172,7 @@ const bridge = {
   },
   openGapFolder: async ({ id }) => {
     const { spawn } = await import("node:child_process");
-    const dir = id && gaps[id] ? path.join(DIRS.inbox, id) : DIRS.root;
+    const dir = id && gaps[id] ? path.join(DIRS.inbox, id) : DIRS.root; // frames + prompt live here
     fs.mkdirSync(dir, { recursive: true });
     const cmd = process.platform === "win32" ? ["explorer", [dir]] : process.platform === "darwin" ? ["open", [dir]] : ["xdg-open", [dir]];
     spawn(cmd[0], cmd[1], { detached: true, stdio: "ignore" }).unref();

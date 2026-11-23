@@ -9,7 +9,7 @@ const lfs = uxp.storage.localFileSystem;
 
 const PORT = 47321;
 const TICKS_PER_SEC = 254016000000;
-const VERSION = "0.3.1";
+const VERSION = "0.3.2";
 
 // ---------------------------------------------------------------- utils
 const $ = (id) => document.getElementById(id);
@@ -179,6 +179,7 @@ function connect() {
     $("conn").textContent = "connected"; $("conn").className = "conn on";
     $("offline").className = "banner hidden";
     log("Connected to KawKaw");
+    setTimeout(refreshProjectFolder, 300);
     refreshGaps();
   };
   ws.onclose = () => {
@@ -435,7 +436,9 @@ const handlers = {
       firstFrame = (await handlers.exportFrame({ timeSec: Math.max(0, info.inSec - 1 / info.fps), name: `gap_${stamp}_first` })).path;
       lastFrame = (await handlers.exportFrame({ timeSec: info.outSec, name: `gap_${stamp}_last` })).path;
     }
-    const gap = await bridgeCall("createGap", { sequenceName: info.name, sequenceGuid: String(seq.guid || ""), inSec: info.inSec, outSec: info.outSec, firstFrame, lastFrame });
+    let projectPath = null;
+    try { projectPath = (await ppro.Project.getActiveProject()).path || null; } catch (e) {}
+    const gap = await bridgeCall("createGap", { project: projectPath, sequenceName: info.name, sequenceGuid: String(seq.guid || ""), inSec: info.inSec, outSec: info.outSec, firstFrame, lastFrame });
     showTab("ai");
     await refreshGaps(gap.id);
     toast(`AI clip ready to set up: ${gap.durationSec.toFixed(1)} s at ${fmt(gap.inSec)}. Add frames or a prompt, then press Generate.`, "ok");
@@ -729,7 +732,9 @@ $("generate").addEventListener("click", async () => {
     const r = await bridgeCall("generateGap", { id: g.id, prompt: $("prompt").value, provider: prov });
     step(r.status + (r.progress ? " · " + r.progress : ""));
     toast(prov === "manual"
-      ? "Manual mode: press 'Open folder', make the video on the Kling/Higgsfield website with these frames and prompt, and save it into that folder. KawKaw places it on the timeline automatically."
+      ? (PROJECT_FOLDER
+          ? "Manual mode: make the video on the Kling/Higgsfield website (frames + prompt: press 'Open folder' → or use the images shown here), then save the download into your AI videos folder. KawKaw places it automatically."
+          : "Manual mode: press 'Open folder', make the video on the Kling/Higgsfield website with these frames and prompt, and save it into that folder. KawKaw places it on the timeline automatically. Tip: set an AI videos folder for this project at the top.")
       : "Sent to " + (prov === "kling" ? "Kling" : "Higgsfield") + ". Usually 1–5 minutes; watch the status line below. The clip appears on the timeline by itself.", "ok");
   } catch (e) {
     $("gapStatus").textContent = "Error: " + e.message;
@@ -740,6 +745,32 @@ $("generate").addEventListener("click", async () => {
   }
 });
 $("openFolder").addEventListener("click", () => bridgeCall("openGapFolder", { id: currentGapId }).catch((e) => log(e.message, true)));
+// ---------------------------------------------------------------- AI videos folder per project
+let PROJECT_PATH = null, PROJECT_FOLDER = null;
+async function refreshProjectFolder() {
+  try {
+    const pr = await ppro.Project.getActiveProject();
+    PROJECT_PATH = pr ? pr.path || null : null;
+  } catch (e) { PROJECT_PATH = null; }
+  try { PROJECT_FOLDER = PROJECT_PATH ? await bridgeCall("getProjectFolder", { project: PROJECT_PATH }) : null; } catch (e) { PROJECT_FOLDER = null; }
+  $("projFolder").textContent = PROJECT_FOLDER
+    ? PROJECT_FOLDER + "  ·  new videos saved here are placed automatically"
+    : PROJECT_PATH ? "Not set: choose where this project's AI videos (e.g. Kling downloads) will go" : "Save your Premiere project first, then choose its AI videos folder";
+}
+$("projFolderPick").addEventListener("click", async () => {
+  try {
+    await refreshProjectFolder();
+    if (!PROJECT_PATH) throw new Error("Save your Premiere project first.");
+    const f = await lfs.getFolder();
+    if (!f) return;
+    await bridgeCall("setProjectFolder", { project: PROJECT_PATH, folder: f.nativePath });
+    await refreshProjectFolder();
+    toast("AI videos folder set for this project ✔ Save Kling downloads there and KawKaw places them on the timeline.", "ok");
+  } catch (e) { log(e.message, true); }
+});
+$("projFolderOpen").addEventListener("click", () => (PROJECT_FOLDER ? bridgeCall("openFolder", { path: PROJECT_FOLDER }) : bridgeCall("openGapFolder", {})).catch((e) => log(e.message, true)));
+setInterval(refreshProjectFolder, 15000); // follows you when you switch projects
+
 // ---------------------------------------------------------------- Chat with Claude
 const CHAT_SESSION = "panel";
 let chatBusy = false, thinkingEl = null;

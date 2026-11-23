@@ -117,6 +117,8 @@ Then write a prompt (or let Claude write it), choose the provider, **Generate**.
 - **Higgsfield:** default model `/kling-video/o3/first-last-frame` (3–15 s, std/pro/4k). Any Higgsfield model path can go in Settings.
 - **Kling:** default `kling-2.5-turbo` (5 or 10 s; first+last frame uses 1080p).
 
+**AI videos folder per project:** in AI Fill, press **Choose…** next to *AI videos folder (this project)* and pick where this project's AI videos live, e.g. the project's `AI` folder or your browser's Downloads folder. KawKaw remembers one folder per Premiere project. In Manual mode, every new video saved there is placed on the next waiting AI clip, in order. API-generated videos are saved there too.
+
 The AI clip goes on the first free video track above the gap (or the track you set), trimmed to the gap length. Generated files are kept in `~/KawKaw/generated/`.
 
 ## Custom buttons

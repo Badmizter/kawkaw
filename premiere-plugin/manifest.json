@@ -1,7 +1,7 @@
 {
   "id": "com.nelsonmaita.kawkaw",
   "name": "KawKaw",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "main": "index.html",
   "manifestVersion": 5,
   "host": {
