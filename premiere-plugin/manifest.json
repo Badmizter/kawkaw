@@ -1,7 +1,7 @@
 {
   "id": "com.nelsonmaita.kawkaw",
   "name": "KawKaw",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "main": "index.html",
   "manifestVersion": 5,
   "host": {
@@ -11,31 +11,72 @@
   "requiredPermissions": {
     "localFileSystem": "fullAccess",
     "clipboard": "readAndWrite",
-    "launchProcess": { "schemes": ["http"], "extensions": [""] },
-    "network": {
-      "domains": [
-        "ws://127.0.0.1:47321",
-        "http://127.0.0.1:47321",
-        "ws://localhost:47321",
-        "http://localhost:47321"
+    "launchProcess": {
+      "schemes": [
+        "http"
+      ],
+      "extensions": [
+        ""
       ]
+    },
+    "network": {
+      "domains": "all"
     }
   },
   "entrypoints": [
     {
       "id": "kawkaw-panel",
       "type": "panel",
-      "label": { "default": "KawKaw" },
-      "minimumSize": { "width": 260, "height": 300 },
-      "maximumSize": { "width": 2000, "height": 2000 },
-      "preferredDockedSize": { "width": 320, "height": 560 },
-      "preferredFloatingSize": { "width": 360, "height": 620 },
+      "label": {
+        "default": "KawKaw"
+      },
+      "minimumSize": {
+        "width": 260,
+        "height": 300
+      },
+      "maximumSize": {
+        "width": 2000,
+        "height": 2000
+      },
+      "preferredDockedSize": {
+        "width": 320,
+        "height": 560
+      },
+      "preferredFloatingSize": {
+        "width": 360,
+        "height": 620
+      },
       "icons": [
-        { "width": 23, "height": 23, "path": "icons/panel.png", "scale": [1, 2], "theme": ["all"] }
+        {
+          "width": 23,
+          "height": 23,
+          "path": "icons/panel.png",
+          "scale": [
+            1,
+            2
+          ],
+          "theme": [
+            "all"
+          ]
+        }
       ]
     }
   ],
   "icons": [
-    { "width": 48, "height": 48, "path": "icons/plugin.png", "scale": [1, 2], "theme": ["all"], "species": ["pluginList"] }
+    {
+      "width": 48,
+      "height": 48,
+      "path": "icons/plugin.png",
+      "scale": [
+        1,
+        2
+      ],
+      "theme": [
+        "all"
+      ],
+      "species": [
+        "pluginList"
+      ]
+    }
   ]
 }

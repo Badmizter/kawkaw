@@ -9,7 +9,7 @@ const lfs = uxp.storage.localFileSystem;
 
 const PORT = 47321;
 const TICKS_PER_SEC = 254016000000;
-const VERSION = "0.2.1";
+const VERSION = "0.2.2";
 
 // ---------------------------------------------------------------- utils
 const $ = (id) => document.getElementById(id);
@@ -496,7 +496,10 @@ const handlers = {
   },
 };
 
+// Connect to the KawKaw app FIRST, so a UI problem can never stop the connection.
+try { connect(); } catch (e) { console.error("KawKaw connect failed", e); }
 // ---------------------------------------------------------------- UI
+window.addEventListener("error", (e) => { try { toast("Panel error: " + (e.message || e), "err"); } catch (x) {} });
 async function runAction(action, params) {
   const fn = handlers[action];
   if (!fn) throw new Error("Unknown action: " + action);
@@ -507,10 +510,10 @@ async function runAction(action, params) {
 }
 
 function showTab(name) {
-  for (const t of document.querySelectorAll(".tab")) t.className = "tab" + (t.getAttribute("data-tab") === name ? " active" : "");
-  for (const p of document.querySelectorAll(".page")) p.className = "page" + (p.id === "page-" + name ? "" : " hidden");
+  Array.prototype.forEach.call(document.querySelectorAll(".tab"), (t) => { t.className = "tab" + (t.getAttribute("data-tab") === name ? " active" : ""); });
+  Array.prototype.forEach.call(document.querySelectorAll(".page"), (p) => { p.className = "page" + (p.id === "page-" + name ? "" : " hidden"); });
 }
-for (const t of document.querySelectorAll(".tab")) t.addEventListener("click", () => showTab(t.getAttribute("data-tab")));
+Array.prototype.forEach.call(document.querySelectorAll(".tab"), (t) => t.addEventListener("click", () => showTab(t.getAttribute("data-tab"))));
 
 function renderConfig() {
   if (!CONFIG) return;
@@ -648,4 +651,4 @@ $("generate").addEventListener("click", async () => {
 $("place").addEventListener("click", () => bridgeCall("placeGap", { id: currentGapId }).then(() => log("Placed")).catch((e) => log(e.message, true)));
 $("deleteGap").addEventListener("click", () => bridgeCall("deleteGap", { id: currentGapId }).then(() => { currentGapId = null; refreshGaps(); }).catch((e) => log(e.message, true)));
 
-connect();
+
