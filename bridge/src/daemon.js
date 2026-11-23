@@ -14,7 +14,7 @@ import { readInvite } from "./hubclient.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GAPS_PATH = path.join(HOME_DIR, "gaps.json");
-const VERSION = "0.2.2";
+const VERSION = "0.2.3";
 
 let config = loadConfig();
 const hosts = new Map(); // role -> ws  (premiere, ae)
@@ -56,12 +56,16 @@ function callHost(role, method, params, timeoutMs = 120000) {
   });
 }
 
+const runTokens = {}; // id -> token of the current run (a new Generate replaces the old run)
 async function runGeneration(id) {
   const gap = gaps[id];
   if (!gap) throw new Error("Unknown gap " + id);
-  updateGap(id, { status: "generating", error: null, progress: "starting" });
+  const token = (runTokens[id] = Math.random().toString(36).slice(2));
+  const current = () => runTokens[id] === token;
+  updateGap(id, { status: "generating", error: null, progress: "starting", cancelled: false, runProvider: gap.provider || config.ai.defaultProvider });
   try {
-    const file = await generateForGap(config, gap, (p) => updateGap(id, { progress: p }));
+    const file = await generateForGap(config, gaps[id], (p) => current() && updateGap(id, { progress: p }), () => !current() || !!gaps[id]?.cancelled);
+    if (!current()) return;
     updateGap(id, { status: "ready", videoPath: file, progress: "done" });
     log("gap ready", id, file);
     if (hosts.has("premiere")) {
@@ -73,8 +77,9 @@ async function runGeneration(id) {
       }
     }
   } catch (e) {
+    if (!current()) return; // replaced by a newer run
     log("gap failed", id, e.message);
-    updateGap(id, { status: e.message === "cancelled" ? "cancelled" : "failed", error: e.message });
+    updateGap(id, { status: e.message === "cancelled" ? "cancelled" : "failed", error: e.message === "cancelled" ? null : e.message });
   }
 }
 
@@ -123,16 +128,26 @@ const bridge = {
   },
   listGaps: () => Object.values(gaps).sort((a, b) => b.createdAt - a.createdAt).slice(0, 50),
   getGap: ({ id }) => gaps[id] || null,
-  deleteGap: ({ id }) => { delete gaps[id]; saveGaps(); broadcast("gapDeleted", { id }); return true; },
+  deleteGap: ({ id }) => { delete runTokens[id]; delete gaps[id]; saveGaps(); broadcast("gapDeleted", { id }); return true; },
   generateGap: ({ id, prompt, provider }) => {
     if (!gaps[id]) throw new Error("Unknown gap " + id);
-    if (gaps[id].status === "generating") throw new Error("Already generating");
+    // A Manual run just waits for a file, so pressing Generate again simply restarts it (e.g. with Kling).
+    // API runs are already paid for, so those are not restarted.
+    if (gaps[id].status === "generating" && gaps[id].runProvider && gaps[id].runProvider !== "manual") throw new Error("Already generating with " + gaps[id].runProvider + ". Wait for it to finish, or Delete this AI clip and make a new one.");
     if (prompt != null) updateGap(id, { prompt });
     if (provider) updateGap(id, { provider });
     runGeneration(id); // background
     return gaps[id];
   },
-  cancelGap: ({ id }) => { if (gaps[id]) gaps[id].cancelled = true; return true; },
+  openGapFolder: async ({ id }) => {
+    const { spawn } = await import("node:child_process");
+    const dir = id && gaps[id] ? path.join(DIRS.inbox, id) : DIRS.root;
+    fs.mkdirSync(dir, { recursive: true });
+    const cmd = process.platform === "win32" ? ["explorer", [dir]] : process.platform === "darwin" ? ["open", [dir]] : ["xdg-open", [dir]];
+    spawn(cmd[0], cmd[1], { detached: true, stdio: "ignore" }).unref();
+    return dir;
+  },
+  cancelGap: ({ id }) => { if (gaps[id]) { gaps[id].cancelled = true; delete runTokens[id]; updateGap(id, { status: "cancelled" }); } return true; },
   placeGap: async ({ id }) => {
     const g = gaps[id];
     if (!g?.videoPath) throw new Error("This gap has no generated video yet.");

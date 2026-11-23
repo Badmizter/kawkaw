@@ -19,10 +19,14 @@ async function download(url, dest) {
 }
 
 async function jsonFetch(url, opts) {
-  const res = await fetch(url, opts);
+  let res;
+  try { res = await fetch(url, opts); }
+  catch (e) { throw new Error(`Couldn't reach ${new URL(url).host} (${e.cause?.code || e.message}). Check this computer's internet connection or firewall.`); }
   const text = await res.text();
   let body;
   try { body = JSON.parse(text); } catch { body = { raw: text }; }
+  if (res.status === 401 || res.status === 403) throw new Error(`The API key was rejected (HTTP ${res.status}). Check it in KawKaw settings → Save & test key.`);
+  if (res.status === 402 || /balance|insufficient|credit|quota/i.test(text)) throw new Error(`Not enough API credits (HTTP ${res.status}). Buy API credits on the provider's developer site: ${text.slice(0, 200)}`);
   if (!res.ok) throw new Error(`${opts?.method || "GET"} ${url} → ${res.status}: ${text.slice(0, 400)}`);
   return body;
 }
@@ -96,7 +100,7 @@ async function klingGenerate(cfg, gap, onUpdate) {
 }
 
 // ---------------- Manual (website + watch folder) ----------------
-async function manualGenerate(gap, onUpdate) {
+async function manualGenerate(gap, onUpdate, isCancelled) {
   const dir = path.join(DIRS.inbox, gap.id);
   fs.mkdirSync(dir, { recursive: true });
   if (gap.firstFrame) fs.copyFileSync(gap.firstFrame, path.join(dir, "FIRST_FRAME" + path.extname(gap.firstFrame)));
@@ -107,25 +111,25 @@ async function manualGenerate(gap, onUpdate) {
   );
   onUpdate(`waiting for a video file in ${dir}`);
   for (;;) {
-    if (gap.cancelled) throw new Error("cancelled");
+    if (isCancelled()) throw new Error("cancelled");
     const vid = fs.readdirSync(dir).find((f) => VIDEO_EXT.test(f));
     if (vid) {
       const full = path.join(dir, vid);
       // wait until the file stops growing (download finished)
       let size = -1;
-      while (size !== fs.statSync(full).size) { size = fs.statSync(full).size; await sleep(1500); }
+      while (size !== fs.statSync(full).size) { if (isCancelled()) throw new Error("cancelled"); size = fs.statSync(full).size; await sleep(1500); }
       return "file://" + full;
     }
     await sleep(2000);
   }
 }
 
-export async function generateForGap(config, gap, onUpdate = () => {}) {
+export async function generateForGap(config, gap, onUpdate = () => {}, isCancelled = () => false) {
   const provider = gap.provider || config.ai.defaultProvider;
   let url;
   if (provider === "higgsfield") url = await higgsfieldGenerate(config.ai.higgsfield, gap, onUpdate);
   else if (provider === "kling") url = await klingGenerate(config.ai.kling, gap, onUpdate);
-  else url = await manualGenerate(gap, onUpdate);
+  else url = await manualGenerate(gap, onUpdate, isCancelled);
   if (!url) throw new Error("Provider finished but returned no video URL");
   const dest = path.join(DIRS.generated, `${gap.id}.mp4`);
   if (url.startsWith("file://")) {

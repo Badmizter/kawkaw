@@ -9,7 +9,7 @@ const lfs = uxp.storage.localFileSystem;
 
 const PORT = 47321;
 const TICKS_PER_SEC = 254016000000;
-const VERSION = "0.2.2";
+const VERSION = "0.2.3";
 
 // ---------------------------------------------------------------- utils
 const $ = (id) => document.getElementById(id);
@@ -157,15 +157,18 @@ let ws = null;
 let seqNo = 0;
 const waiting = {};
 let CONFIG = null;
+let APP_VERSION = "?";
 let HOSTS = [];
 
-function bridgeCall(method, params, target) {
+const SLOW = { detectSilence: 600000, aeSendRange: 300000, aeRun: 300000, placeGap: 120000, waitForFile: 60000 };
+function bridgeCall(method, params, target, timeoutMs) {
   return new Promise((resolve, reject) => {
     if (!ws || ws.readyState !== 1) return reject(new Error("KawKaw daemon is not running"));
     const id = "p" + ++seqNo;
     waiting[id] = { resolve, reject };
     ws.send(JSON.stringify({ type: "call", id, target: target || "bridge", method, params: params || {} }));
-    setTimeout(() => { if (waiting[id]) { delete waiting[id]; reject(new Error(method + " timed out")); } }, 600000);
+    const ms = timeoutMs || SLOW[method] || 20000;
+    setTimeout(() => { if (waiting[id]) { delete waiting[id]; reject(new Error(`The KawKaw app didn't answer "${method}" within ${Math.round(ms / 1000)} s. Try closing and reopening the KawKaw app.`)); } }, ms);
   });
 }
 
@@ -187,7 +190,7 @@ function connect() {
   ws.onmessage = async (ev) => {
     let m;
     try { m = JSON.parse(ev.data); } catch (e) { return; }
-    if (m.type === "welcome") { CONFIG = m.config; renderConfig(); }
+    if (m.type === "welcome") { CONFIG = m.config; APP_VERSION = m.version; $("conn").textContent = "connected · app " + m.version + " · panel " + VERSION; renderConfig(); }
     else if (m.type === "result" && waiting[m.id]) {
       const w = waiting[m.id]; delete waiting[m.id];
       m.ok ? w.resolve(m.data) : w.reject(new Error(m.error));
@@ -636,18 +639,35 @@ $("prompt").addEventListener("blur", () => saveGapFields().catch((e) => log(e.me
 $("provider").addEventListener("change", () => saveGapFields().catch((e) => log(e.message, true)));
 $("gapTrack").addEventListener("change", () => saveGapFields().catch((e) => log(e.message, true)));
 $("generate").addEventListener("click", async () => {
+  const btn = $("generate");
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = "Starting…";
+  const step = (msg) => { $("gapStatus").textContent = msg; log(msg); };
   try {
-    await saveGapFields();
     const g = gapById(currentGapId);
-    if (!g) return toast("Create an AI clip first (From In/Out or At playhead).", "err");
-    if (!$("prompt").value.trim() && !g.firstFrame) return toast("Write a prompt or choose a first frame before generating.", "err");
-    await bridgeCall("generateGap", { id: currentGapId });
-    const prov = $("provider").value;
+    if (!g) throw new Error("Create an AI clip first (From In/Out or At playhead).");
+    if (!$("prompt").value.trim() && !g.firstFrame) throw new Error("Write a prompt or choose a first frame before generating.");
+    const prov = $("provider").value || "manual";
+    toast("Generate pressed: starting with " + (prov === "kling" ? "Kling API" : prov === "higgsfield" ? "Higgsfield API" : "Manual mode") + "…", "ok");
+    step("1/2 Saving prompt and settings…");
+    await saveGapFields();
+    step("2/2 Asking the KawKaw app to start…");
+    const r = await bridgeCall("generateGap", { id: g.id, prompt: $("prompt").value, provider: prov });
+    step(r.status + (r.progress ? " · " + r.progress : ""));
     toast(prov === "manual"
-      ? "Manual mode: open your KawKaw folder → inbox → " + g.id + ". Make the video on the Kling/Higgsfield website and save it there. It's placed on the timeline automatically."
-      : "Sent to " + (prov === "kling" ? "Kling" : "Higgsfield") + ". This usually takes 1–5 minutes; the clip appears on the timeline by itself.", "ok");
-  } catch (e) { log(e.message, true); }
+      ? "Manual mode: press 'Open folder', make the video on the Kling/Higgsfield website with these frames and prompt, and save it into that folder. KawKaw places it on the timeline automatically."
+      : "Sent to " + (prov === "kling" ? "Kling" : "Higgsfield") + ". Usually 1–5 minutes; watch the status line below. The clip appears on the timeline by itself.", "ok");
+  } catch (e) {
+    $("gapStatus").textContent = "Error: " + e.message;
+    log(e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
 });
+$("openFolder").addEventListener("click", () => bridgeCall("openGapFolder", { id: currentGapId }).catch((e) => log(e.message, true)));
 $("place").addEventListener("click", () => bridgeCall("placeGap", { id: currentGapId }).then(() => log("Placed")).catch((e) => log(e.message, true)));
 $("deleteGap").addEventListener("click", () => bridgeCall("deleteGap", { id: currentGapId }).then(() => { currentGapId = null; refreshGaps(); }).catch((e) => log(e.message, true)));
 
