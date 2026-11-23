@@ -2,7 +2,7 @@
 ; Installs per-user (no admin needed) to %LOCALAPPDATA%\Programs\KawKaw
 #define AppVersion GetEnv("KAWKAW_VERSION")
 #if AppVersion == ""
-  #define AppVersion "0.2.3"
+  #define AppVersion "0.2.4"
 #endif
 
 [Setup]

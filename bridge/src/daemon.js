@@ -14,7 +14,7 @@ import { readInvite } from "./hubclient.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GAPS_PATH = path.join(HOME_DIR, "gaps.json");
-const VERSION = "0.2.3";
+const VERSION = "0.2.4";
 
 let config = loadConfig();
 const hosts = new Map(); // role -> ws  (premiere, ae)

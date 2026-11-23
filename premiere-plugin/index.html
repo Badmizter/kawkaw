@@ -44,7 +44,7 @@
     </div>
     <div class="hint" style="margin-top:2px">From In/Out uses the frame before In and the frame at Out. At playhead starts empty. You can choose any images from your drives.</div>
     <div class="sub">Your AI clips</div>
-    <select id="gapSelect"></select>
+    <div id="gapSelect" class="picker list"></div>
     <div id="gapEmptyState" class="hint">No AI clips yet. Set In/Out on the timeline and press <b>From In/Out</b>, or press <b>At playhead</b>.</div>
     <div id="gapEditor" class="hidden">
       <div class="meta" id="gapMeta"></div>
@@ -62,11 +62,7 @@
       </div>
       <textarea id="prompt" placeholder="Prompt — or ask Claude: “look at my KawKaw gap and write the prompt”"></textarea>
       <div class="row">
-        <select id="provider">
-          <option value="manual">Manual (website + drop file)</option>
-          <option value="higgsfield">Higgsfield API</option>
-          <option value="kling">Kling API</option>
-        </select>
+        <div id="provider" class="picker"></div>
         <input id="gapTrack" placeholder="V track (auto)" style="width:90px">
       </div>
       <div class="row">
@@ -81,7 +77,7 @@
 
   <!-- PRESETS -->
   <div class="page hidden" id="page-presets">
-    <select id="presetSelect"></select>
+    <div id="presetSelect" class="picker"></div>
     <div id="presetView" class="presetView"></div>
     <div class="row">
       <button id="applyTracks" class="primary">Name tracks</button>

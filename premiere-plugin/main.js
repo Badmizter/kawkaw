@@ -9,7 +9,7 @@ const lfs = uxp.storage.localFileSystem;
 
 const PORT = 47321;
 const TICKS_PER_SEC = 254016000000;
-const VERSION = "0.2.3";
+const VERSION = "0.2.4";
 
 // ---------------------------------------------------------------- utils
 const $ = (id) => document.getElementById(id);
@@ -502,6 +502,26 @@ const handlers = {
 // Connect to the KawKaw app FIRST, so a UI problem can never stop the connection.
 try { connect(); } catch (e) { console.error("KawKaw connect failed", e); }
 // ---------------------------------------------------------------- UI
+
+// Button-based pickers (Premiere panels don't reliably open <select> dropdowns).
+const PICKS = {};
+function setPickOptions(id, opts) { const p = PICKS[id] || (PICKS[id] = { opts: [], val: "", on: null }); p.opts = opts; paintPick(id); }
+function setPick(id, v) { const p = PICKS[id] || (PICKS[id] = { opts: [], val: "", on: null }); p.val = v; paintPick(id); }
+function getPick(id) { return (PICKS[id] && PICKS[id].val) || ""; }
+function onPick(id, fn) { const p = PICKS[id] || (PICKS[id] = { opts: [], val: "", on: null }); p.on = fn; }
+function paintPick(id) {
+  const p = PICKS[id], el = $(id);
+  if (!el) return;
+  el.innerHTML = "";
+  p.opts.forEach((o) => {
+    const b = document.createElement("div");
+    b.className = "pick" + (o.value === p.val ? " on" : "");
+    b.textContent = o.label;
+    b.addEventListener("click", () => { p.val = o.value; paintPick(id); if (p.on) p.on(o.value); });
+    el.appendChild(b);
+  });
+}
+setPickOptions("provider", [{ value: "manual", label: "Manual" }, { value: "kling", label: "Kling API" }, { value: "higgsfield", label: "Higgsfield API" }]);
 window.addEventListener("error", (e) => { try { toast("Panel error: " + (e.message || e), "err"); } catch (x) {} });
 async function runAction(action, params) {
   const fn = handlers[action];
@@ -540,26 +560,22 @@ function renderConfig() {
   }
   $("siDb").value = CONFIG.silence.thresholdDb;
   $("siMin").value = CONFIG.silence.minSilenceSec;
-  $("provider").value = CONFIG.ai.defaultProvider;
-  const ps = $("presetSelect");
-  const cur = ps.value;
-  ps.innerHTML = "";
-  for (const name of Object.keys(CONFIG.presets || {})) {
-    const o = document.createElement("option"); o.value = name; o.textContent = name; ps.appendChild(o);
-  }
-  if (cur && CONFIG.presets[cur]) ps.value = cur;
+  setPick("provider", CONFIG.ai.defaultProvider);
+  const names = Object.keys(CONFIG.presets || {});
+  setPickOptions("presetSelect", names.map((n) => ({ value: n, label: n })));
+  if (!CONFIG.presets[getPick("presetSelect")]) setPick("presetSelect", names[0] || "");
   renderPreset();
 }
 
 function renderPreset() {
-  const p = CONFIG && CONFIG.presets[$("presetSelect").value];
+  const p = CONFIG && CONFIG.presets[getPick("presetSelect")];
   if (!p) { $("presetView").textContent = "No presets yet."; return; }
   const lines = Object.keys(p.tracks || {}).map((k) => `${k}  ${p.tracks[k]}`);
   $("presetView").textContent = `${lines.join("\n")}\n\n${p.bpm ? p.bpm + " BPM · marker every " + (p.beatsPerMarker || 4) + " beats\n" : ""}${p.rules || ""}`;
 }
-$("presetSelect").addEventListener("change", renderPreset);
-$("applyTracks").addEventListener("click", () => handlers.applyPresetTracks({ preset: $("presetSelect").value }).then((r) => log(`Renamed ${r.renamed} tracks`)).catch((e) => log(e.message, true)));
-$("beatMarkers").addEventListener("click", () => handlers.addBeatMarkers({ preset: $("presetSelect").value }).then((r) => log(`Added ${r.added} beat markers`)).catch((e) => log(e.message, true)));
+onPick("presetSelect", renderPreset);
+$("applyTracks").addEventListener("click", () => handlers.applyPresetTracks({ preset: getPick("presetSelect") }).then((r) => log(`Renamed ${r.renamed} tracks`)).catch((e) => log(e.message, true)));
+$("beatMarkers").addEventListener("click", () => handlers.addBeatMarkers({ preset: getPick("presetSelect") }).then((r) => log(`Added ${r.added} beat markers`)).catch((e) => log(e.message, true)));
 $("openSettings").addEventListener("click", () => uxp.shell.openExternal(`http://127.0.0.1:${PORT}/settings`).catch((e) => log("Open http://127.0.0.1:" + PORT + "/settings in your browser", true)));
 
 // ---- AI gap UI
@@ -568,17 +584,10 @@ let currentGapId = null;
 
 async function refreshGaps(selectId) {
   try { GAPS = await bridgeCall("listGaps"); } catch (e) { return; }
-  const s = $("gapSelect");
-  s.innerHTML = "";
-  if (!GAPS.length) { const o = document.createElement("option"); o.textContent = "No gaps yet"; o.value = ""; s.appendChild(o); }
-  for (const g of GAPS) {
-    const o = document.createElement("option");
-    o.value = g.id;
-    o.textContent = `${g.sequenceName || "Gap"} · ${fmt(g.inSec)}–${fmt(g.outSec)} · ${g.status}`;
-    s.appendChild(o);
-  }
+  const label = (g) => `${g.sequenceName || "Clip"} · ${fmt(g.inSec)}–${fmt(g.outSec)} · ${g.status}`;
+  setPickOptions("gapSelect", GAPS.map((g) => ({ value: g.id, label: label(g) })));
   currentGapId = selectId || (GAPS.find((g) => g.id === currentGapId) ? currentGapId : GAPS[0] && GAPS[0].id) || null;
-  if (currentGapId) s.value = currentGapId;
+  setPick("gapSelect", currentGapId || "");
   renderGap();
 }
 function fmt(t) { if (t == null) return "?"; const m = Math.floor(t / 60); return m + ":" + (t % 60).toFixed(2).padStart(5, "0"); }
@@ -594,13 +603,13 @@ function renderGap() {
   const g = gapById(currentGapId);
   $("gapEditor").className = g ? "" : "hidden";
   $("gapEmptyState").className = g ? "hint hidden" : "hint";
-  $("gapSelect").className = g ? "" : "hidden";
+  $("gapSelect").className = g ? "picker list" : "picker list hidden";
   if (!g) return;
   $("gapMeta").textContent = `${fmt(g.inSec)} → ${fmt(g.outSec)}  (${g.durationSec.toFixed(2)} s)  ·  ${g.id}`;
   thumb($("firstThumb"), g.firstFrame);
   thumb($("lastThumb"), g.lastFrame);
   if (document.activeElement !== $("prompt")) $("prompt").value = g.prompt || "";
-  $("provider").value = g.provider || "manual";
+  setPick("provider", g.provider || "manual");
   $("gapTrack").value = g.videoTrack === "auto" ? "" : g.videoTrack || "";
   $("gapStatus").textContent = `${g.status}${g.progress ? " · " + g.progress : ""}${g.error ? " · " + g.error : ""}`;
 }
@@ -610,15 +619,13 @@ function onGapEvent(g) {
   const i = GAPS.findIndex((x) => x.id === g.id);
   if (i >= 0) GAPS[i] = g; else { refreshGaps(); return; }
   if (g.id === currentGapId) renderGap();
-  let o = null;
-  try { o = Array.prototype.find.call($("gapSelect").options, (x) => x.value === g.id); } catch (e) {}
-  if (o) o.textContent = `${g.sequenceName || "Gap"} · ${fmt(g.inSec)}–${fmt(g.outSec)} · ${g.status}`;
+  setPickOptions("gapSelect", GAPS.map((x) => ({ value: x.id, label: `${x.sequenceName || "Clip"} · ${fmt(x.inSec)}–${fmt(x.outSec)} · ${x.status}` })));
 }
 async function saveGapFields() {
   const g = gapById(currentGapId);
   if (!g) return;
   const tr = $("gapTrack").value.trim();
-  await bridgeCall("updateGap", { id: g.id, prompt: $("prompt").value, provider: $("provider").value, videoTrack: tr ? Number(tr) : "auto" });
+  await bridgeCall("updateGap", { id: g.id, prompt: $("prompt").value, provider: getPick("provider"), videoTrack: tr ? Number(tr) : "auto" });
 }
 async function pickFrame(which) {
   const g = gapById(currentGapId);
@@ -628,7 +635,7 @@ async function pickFrame(which) {
   await bridgeCall("updateGap", { id: g.id, [which]: f.nativePath });
 }
 
-$("gapSelect").addEventListener("change", () => { currentGapId = $("gapSelect").value; renderGap(); });
+onPick("gapSelect", (v) => { currentGapId = v; renderGap(); });
 $("gapFromInOut").addEventListener("click", () => handlers.createGapFromInOut({ useFrames: true }).catch((e) => log(e.message, true)));
 $("gapEmpty").addEventListener("click", () => handlers.createGapFromInOut({ atPlayhead: true, durationSec: Number($("gapDur").value) }).catch((e) => log(e.message, true)));
 $("pickFirst").addEventListener("click", () => pickFrame("firstFrame").catch((e) => log(e.message, true)));
@@ -636,7 +643,7 @@ $("pickLast").addEventListener("click", () => pickFrame("lastFrame").catch((e) =
 $("clearFirst").addEventListener("click", () => bridgeCall("updateGap", { id: currentGapId, firstFrame: null }).catch((e) => log(e.message, true)));
 $("clearLast").addEventListener("click", () => bridgeCall("updateGap", { id: currentGapId, lastFrame: null }).catch((e) => log(e.message, true)));
 $("prompt").addEventListener("blur", () => saveGapFields().catch((e) => log(e.message, true)));
-$("provider").addEventListener("change", () => saveGapFields().catch((e) => log(e.message, true)));
+onPick("provider", () => saveGapFields().then(() => toast("Provider: " + getPick("provider") + ". Press Generate to start.", "ok")).catch((e) => log(e.message, true)));
 $("gapTrack").addEventListener("change", () => saveGapFields().catch((e) => log(e.message, true)));
 $("generate").addEventListener("click", async () => {
   const btn = $("generate");
@@ -649,7 +656,7 @@ $("generate").addEventListener("click", async () => {
     const g = gapById(currentGapId);
     if (!g) throw new Error("Create an AI clip first (From In/Out or At playhead).");
     if (!$("prompt").value.trim() && !g.firstFrame) throw new Error("Write a prompt or choose a first frame before generating.");
-    const prov = $("provider").value || "manual";
+    const prov = getPick("provider") || "manual";
     toast("Generate pressed: starting with " + (prov === "kling" ? "Kling API" : prov === "higgsfield" ? "Higgsfield API" : "Manual mode") + "…", "ok");
     step("1/2 Saving prompt and settings…");
     await saveGapFields();

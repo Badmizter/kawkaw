@@ -44,3 +44,9 @@ button.sm { padding: 3px 6px; font-size: 11px; }
 .toast { border-radius: 6px; padding: 7px 10px; margin-bottom: 8px; font-size: 12px; background: #1f2f4d; color: #d6e6ff; }
 .toast.ok { background: #1f4d36; color: #c9f5dc; }
 .toast.err { background: #4d1f1f; color: #ffd2cc; }
+
+.picker { display: flex; flex-wrap: wrap; margin: 6px 0; flex: 1; }
+.picker .pick { padding: 6px 10px; margin: 0 6px 6px 0; border-radius: 5px; background: #2b2b2f; color: #cfcac4; cursor: pointer; font-size: 12px; border: 1px solid #3a3a3e; }
+.picker .pick.on { background: #9b5cff; color: #fff; border-color: #b88cff; }
+.picker.list { flex-direction: column; flex-wrap: nowrap; }
+.picker.list .pick { margin-right: 0; }
