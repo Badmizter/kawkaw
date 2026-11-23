@@ -9,7 +9,7 @@ const lfs = uxp.storage.localFileSystem;
 
 const PORT = 47321;
 const TICKS_PER_SEC = 254016000000;
-const VERSION = "0.2.0";
+const VERSION = "0.2.1";
 
 // ---------------------------------------------------------------- utils
 const $ = (id) => document.getElementById(id);
@@ -17,7 +17,16 @@ const T = (sec) => ppro.TickTime.createWithSeconds(Math.max(0, sec));
 const secs = (tt) => (tt && typeof tt.seconds === "number" ? tt.seconds : 0);
 const basename = (p) => String(p).split(/[\\/]/).pop();
 
+let toastTimer = null;
+function toast(msg, kind) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "toast" + (kind ? " " + kind : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = "toast hidden"; }, kind === "err" ? 12000 : 6000);
+}
 function log(msg, isErr) {
+  if (isErr) toast(msg, "err");
   const d = document.createElement("div");
   d.textContent = new Date().toLocaleTimeString() + "  " + msg;
   if (isErr) d.className = "err";
@@ -165,11 +174,13 @@ function connect() {
   ws.onopen = () => {
     ws.send(JSON.stringify({ type: "hello", role: "premiere", version: VERSION }));
     $("conn").textContent = "connected"; $("conn").className = "conn on";
+    $("offline").className = "banner hidden";
     log("Connected to KawKaw");
     refreshGaps();
   };
   ws.onclose = () => {
     $("conn").textContent = "offline"; $("conn").className = "conn off";
+    $("offline").className = "banner";
     setTimeout(connect, 3000);
   };
   ws.onerror = () => {};
@@ -409,10 +420,11 @@ const handlers = {
   },
 
   // ---- AI gap
-  async createGapFromInOut({ useFrames = true }) {
+  async createGapFromInOut({ useFrames = true, atPlayhead = false, durationSec = 5 }) {
     const { seq } = await ctx();
     const info = await seqInfo(seq);
-    if (!(info.outSec > info.inSec)) throw new Error("Set In and Out points around the part to fill first");
+    if (atPlayhead) { info.inSec = info.playheadSec; info.outSec = info.playheadSec + Math.max(1, Number(durationSec) || 5); useFrames = false; }
+    if (!(info.outSec > info.inSec)) throw new Error("Set In and Out points on the timeline first (press I and O), or use At playhead.");
     let firstFrame = null, lastFrame = null;
     if (useFrames) {
       const stamp = Date.now();
@@ -422,6 +434,7 @@ const handlers = {
     const gap = await bridgeCall("createGap", { sequenceName: info.name, sequenceGuid: String(seq.guid || ""), inSec: info.inSec, outSec: info.outSec, firstFrame, lastFrame });
     showTab("ai");
     await refreshGaps(gap.id);
+    toast(`AI clip ready to set up: ${gap.durationSec.toFixed(1)} s at ${fmt(gap.inSec)}. Add frames or a prompt, then press Generate.`, "ok");
     return gap;
   },
 
@@ -574,6 +587,8 @@ function thumb(el, p) {
 function renderGap() {
   const g = gapById(currentGapId);
   $("gapEditor").className = g ? "" : "hidden";
+  $("gapEmptyState").className = g ? "hint hidden" : "hint";
+  $("gapSelect").className = g ? "" : "hidden";
   if (!g) return;
   $("gapMeta").textContent = `${fmt(g.inSec)} → ${fmt(g.outSec)}  (${g.durationSec.toFixed(2)} s)  ·  ${g.id}`;
   thumb($("firstThumb"), g.firstFrame);
@@ -584,6 +599,8 @@ function renderGap() {
   $("gapStatus").textContent = `${g.status}${g.progress ? " · " + g.progress : ""}${g.error ? " · " + g.error : ""}`;
 }
 function onGapEvent(g) {
+  if (g.status === "failed" && g.error) toast("AI clip failed: " + g.error, "err");
+  if (g.status === "placed") toast("AI clip placed on the timeline ✔", "ok");
   const i = GAPS.findIndex((x) => x.id === g.id);
   if (i >= 0) GAPS[i] = g; else { refreshGaps(); return; }
   if (g.id === currentGapId) renderGap();
@@ -607,7 +624,7 @@ async function pickFrame(which) {
 
 $("gapSelect").addEventListener("change", () => { currentGapId = $("gapSelect").value; renderGap(); });
 $("gapFromInOut").addEventListener("click", () => handlers.createGapFromInOut({ useFrames: true }).catch((e) => log(e.message, true)));
-$("gapEmpty").addEventListener("click", () => handlers.createGapFromInOut({ useFrames: false }).catch((e) => log(e.message, true)));
+$("gapEmpty").addEventListener("click", () => handlers.createGapFromInOut({ atPlayhead: true, durationSec: Number($("gapDur").value) }).catch((e) => log(e.message, true)));
 $("pickFirst").addEventListener("click", () => pickFrame("firstFrame").catch((e) => log(e.message, true)));
 $("pickLast").addEventListener("click", () => pickFrame("lastFrame").catch((e) => log(e.message, true)));
 $("clearFirst").addEventListener("click", () => bridgeCall("updateGap", { id: currentGapId, firstFrame: null }).catch((e) => log(e.message, true)));
@@ -618,8 +635,14 @@ $("gapTrack").addEventListener("change", () => saveGapFields().catch((e) => log(
 $("generate").addEventListener("click", async () => {
   try {
     await saveGapFields();
+    const g = gapById(currentGapId);
+    if (!g) return toast("Create an AI clip first (From In/Out or At playhead).", "err");
+    if (!$("prompt").value.trim() && !g.firstFrame) return toast("Write a prompt or choose a first frame before generating.", "err");
     await bridgeCall("generateGap", { id: currentGapId });
-    log("Generation started");
+    const prov = $("provider").value;
+    toast(prov === "manual"
+      ? "Manual mode: open your KawKaw folder → inbox → " + g.id + ". Make the video on the Kling/Higgsfield website and save it there. It's placed on the timeline automatically."
+      : "Sent to " + (prov === "kling" ? "Kling" : "Higgsfield") + ". This usually takes 1–5 minutes; the clip appears on the timeline by itself.", "ok");
   } catch (e) { log(e.message, true); }
 });
 $("place").addEventListener("click", () => bridgeCall("placeGap", { id: currentGapId }).then(() => log("Placed")).catch((e) => log(e.message, true)));

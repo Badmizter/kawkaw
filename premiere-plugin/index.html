@@ -10,6 +10,9 @@
     <div id="conn" class="conn off">offline</div>
   </div>
 
+  <div id="offline" class="banner">KawKaw isn't running. Open the <b>KawKaw</b> app (Start menu / Applications), and this panel connects by itself.</div>
+  <div id="toast" class="toast hidden"></div>
+
   <div class="tabs">
     <div class="tab active" data-tab="buttons">Buttons</div>
     <div class="tab" data-tab="ai">AI Fill</div>
@@ -33,11 +36,16 @@
 
   <!-- AI FILL -->
   <div class="page hidden" id="page-ai">
+    <div class="sub" style="margin-top:0">New AI clip</div>
     <div class="row">
-      <button id="gapFromInOut" class="primary">New gap from In/Out</button>
-      <button id="gapEmpty" class="ghost">Empty gap</button>
+      <button id="gapFromInOut" class="primary">From In/Out</button>
+      <button id="gapEmpty" class="ghost">At playhead</button>
+      <input id="gapDur" type="number" value="5" step="0.5" min="1" title="Seconds (for At playhead)"><label>s</label>
     </div>
+    <div class="hint" style="margin-top:2px">From In/Out uses the frame before In and the frame at Out. At playhead starts empty. You can choose any images from your drives.</div>
+    <div class="sub">Your AI clips</div>
     <select id="gapSelect"></select>
+    <div id="gapEmptyState" class="hint">No AI clips yet. Set In/Out on the timeline and press <b>From In/Out</b>, or press <b>At playhead</b>.</div>
     <div id="gapEditor" class="hidden">
       <div class="meta" id="gapMeta"></div>
       <div class="frames">

@@ -25,6 +25,7 @@
   .row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .hint { color:var(--dim); font-size:12px; margin-top:6px; }
   .bar { position:sticky; bottom:0; padding:14px 32px; background:linear-gradient(transparent, var(--bg) 40%); display:flex; gap:12px; align-items:center; }
+  button.test { background:#2a2442; padding:8px 14px; }
   button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:10px 20px; font-weight:600; cursor:pointer; }
   #msg { color:var(--dim); }
 </style>
@@ -91,13 +92,15 @@
     </div>
     <label>Sound</label><select id="hfSound"><option>off</option><option>on</option></select>
     <div class="hint">Keys from console.higgsfield.ai</div>
+    <div style="margin-top:10px"><button type="button" class="test" data-p="higgsfield">Save &amp; test Higgsfield key</button> <span class="hint" id="test-higgsfield"></span></div>
   </section>
   <section>
     <h2>Kling</h2>
     <label>API key</label><input id="klKey" type="password">
     <label>Model</label><input id="klModel">
     <label>API host</label><input id="klBase">
-    <div class="hint">Calls POST {host}/image-to-video/{model}. Last frame needs 1080p.</div>
+    <div class="hint">Get the key at kling.ai/dev/api-key (API credits are bought separately at kling.ai/dev/pricing). Last frame needs 1080p.</div>
+    <div style="margin-top:10px"><button type="button" class="test" data-p="kling">Save &amp; test Kling key</button> <span class="hint" id="test-kling"></span></div>
   </section>
   <section>
     <h2>Remove audio gaps</h2>
@@ -140,6 +143,14 @@ async function load() {
   $("aeName").value = cfg.afterEffects.appName; $("aeExe").value = cfg.afterEffects.windowsExe;
   $("presets").value = JSON.stringify(cfg.presets, null, 2); $("buttons").value = JSON.stringify(cfg.buttons, null, 2);
 }
+async function saveAll() { await $("save").onclick(); }
+for (const b of document.querySelectorAll("button.test")) b.onclick = async () => {
+  const p = b.dataset.p, out = $("test-" + p);
+  out.textContent = "Saving and testing…";
+  await saveAll();
+  const r = await fetch("/api/test-provider", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: p }) }).then(r => r.json());
+  out.textContent = r.message; out.style.color = r.ok ? "#3ee08f" : "#ff8a7a";
+};
 $("save").onclick = async () => {
   try {
     const a = cfg.ai;
@@ -151,7 +162,8 @@ $("save").onclick = async () => {
     Object.assign(cfg.afterEffects, { appName: $("aeName").value, windowsExe: $("aeExe").value });
     cfg.presets = JSON.parse($("presets").value); cfg.buttons = JSON.parse($("buttons").value);
     const r = await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
-    $("msg").textContent = r.ok ? "Saved ✔ — the Premiere panel updates automatically." : "Error: " + (await r.json()).error;
+    $("msg").textContent = r.ok ? "Saved ✔ — the Premiere panel updates automatically. Keys are used when you press Generate in the panel." : "Error: " + (await r.json()).error;
+    $("msg").style.color = r.ok ? "#3ee08f" : "#ff8a7a";
   } catch (e) { $("msg").textContent = "Error: " + e.message; }
 };
 // ---- ChatGPT

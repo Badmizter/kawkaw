@@ -138,3 +138,28 @@ export async function generateForGap(config, gap, onUpdate = () => {}) {
   onUpdate("downloading");
   return download(url, dest);
 }
+
+/** Check that an API key works without generating anything (no cost). */
+export async function testProvider(config, provider) {
+  const call = async (url, headers) => {
+    try { const r = await fetch(url, { headers, signal: AbortSignal.timeout(15000) }); return r.status; }
+    catch (e) { return "network: " + e.message; }
+  };
+  if (provider === "kling") {
+    const c = config.ai.kling;
+    if (!c.apiKey) return { ok: false, message: "No Kling API key saved yet." };
+    const st = await call(`${c.baseUrl}/tasks?task_ids=kawkaw-key-test`, { Authorization: `Bearer ${c.apiKey}` });
+    if (st === 401 || st === 403) return { ok: false, message: `Kling rejected the key (HTTP ${st}). Copy it again from kling.ai/dev/api-key, and make sure the API account has credits.` };
+    if (typeof st === "string") return { ok: false, message: `Couldn't reach Kling (${st}). Check the internet connection or the API host.` };
+    return { ok: true, message: `Kling accepted the key ✔ (HTTP ${st}).` };
+  }
+  if (provider === "higgsfield") {
+    const c = config.ai.higgsfield;
+    if (!c.keyId || !c.keySecret) return { ok: false, message: "Higgsfield key ID and secret are not both saved." };
+    const st = await call(`${c.baseUrl}/requests/00000000-0000-0000-0000-000000000000/status`, { Authorization: `Key ${c.keyId}:${c.keySecret}` });
+    if (st === 401 || st === 403) return { ok: false, message: `Higgsfield rejected the key (HTTP ${st}).` };
+    if (typeof st === "string") return { ok: false, message: `Couldn't reach Higgsfield (${st}).` };
+    return { ok: true, message: `Higgsfield accepted the key ✔ (HTTP ${st}).` };
+  }
+  return { ok: true, message: "Manual mode needs no key." };
+}

@@ -7,14 +7,14 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { loadConfig, saveConfig, publicConfig, DIRS, HOME_DIR, PORT, CONFIG_PATH } from "./config.js";
 import { detectSilence } from "./silence.js";
-import { generateForGap } from "./ai.js";
+import { generateForGap, testProvider } from "./ai.js";
 import { runAEScript, buildRangeCompScript } from "./ae.js";
 import { chatgptInfo, startTunnel, handleMcpHttp, newToken } from "./chatgpt.js";
 import { readInvite } from "./hubclient.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GAPS_PATH = path.join(HOME_DIR, "gaps.json");
-const VERSION = "0.2.0";
+const VERSION = "0.2.1";
 
 let config = loadConfig();
 const hosts = new Map(); // role -> ws  (premiere, ae)
@@ -236,6 +236,10 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === "/logo.png") { res.writeHead(200, { "Content-Type": "image/png" }); return fs.createReadStream(path.join(__dirname, "logo.png")).pipe(res); }
   if (url.pathname === "/api/status") return sendJson(res, 200, bridge.ping());
   if (url.pathname === "/api/shutdown" && req.method === "POST") { sendJson(res, 200, { ok: true }); log("shutting down"); setTimeout(() => process.exit(0), 200); return; }
+  if (url.pathname === "/api/test-provider" && req.method === "POST") {
+    const { provider } = JSON.parse((await readBody(req)) || "{}");
+    return sendJson(res, 200, await testProvider(config, provider));
+  }
   if (url.pathname === "/api/chatgpt" && req.method === "GET") return sendJson(res, 200, chatgptInfo(config));
   if (url.pathname === "/api/chatgpt" && req.method === "POST") {
     try {
