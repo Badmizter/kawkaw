@@ -39,6 +39,7 @@ jobs:
   mac:
     runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [arm64, x64] # Apple Silicon and Intel Macs
     steps:
@@ -59,6 +60,7 @@ jobs:
           APP=build/root/Applications/KawKaw.app
           mkdir -p build/root/Applications
           cp -R installer/mac/KawKaw.app "$APP"
+          mkdir -p "$APP/Contents/Resources"   # git doesn't keep empty folders
           cp assets/kawkaw.icns "$APP/Contents/Resources/kawkaw.icns"
           R="$APP/Contents/Resources/kawkaw"
           mkdir -p "$R/runtime"
